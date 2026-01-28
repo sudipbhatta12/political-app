@@ -1,20 +1,26 @@
 /**
  * Database Module - Political Social Media Assessment
- * SQLite database using sql.js (pure JavaScript, no native compilation needed)
+ * Supabase (PostgreSQL) cloud database for persistent storage
  */
 
-const initSqlJs = require('sql.js');
-const path = require('path');
-const fs = require('fs');
+const { createClient } = require('@supabase/supabase-js');
 
-// Database file path
-const dataDir = process.env.DATABASE_PATH ? path.dirname(process.env.DATABASE_PATH) : path.join(__dirname, '..', 'data');
-const dbPath = process.env.DATABASE_PATH || path.join(dataDir, 'assessment.db');
+// Load environment variables
+require('dotenv').config();
 
-// Database instance
-let db = null;
+// Supabase configuration
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
 
-// Load initial data
+if (!supabaseUrl || !supabaseKey) {
+    console.error('❌ Missing SUPABASE_URL or SUPABASE_KEY environment variables!');
+    console.error('Please set them in your .env file or Render environment settings.');
+}
+
+// Create Supabase client
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Load initial data for seeding
 const provincesData = require('./data/provinces.json');
 const districtsData = require('./data/districts.json');
 const constituenciesData = require('./data/constituencies.json');
@@ -76,273 +82,59 @@ function romanize(text) {
         .replace(/bh/g, 'b');
 }
 
-
 /**
- * Initialize database
+ * Initialize database - seed data if empty
  */
 async function initDatabase() {
-    // Ensure data directory exists
-    if (!fs.existsSync(dataDir)) {
-        fs.mkdirSync(dataDir, { recursive: true });
+    console.log('🔗 Connecting to Supabase...');
+
+    // Check if provinces exist (means DB is already seeded)
+    const { data: provinces, error } = await supabase
+        .from('provinces')
+        .select('id')
+        .limit(1);
+
+    if (error) {
+        console.error('❌ Supabase connection error:', error.message);
+        console.error('Make sure you have run the supabase_schema.sql in your Supabase SQL Editor!');
+        return;
     }
 
-    const SQL = await initSqlJs();
-
-    // Load existing database or create new one
-    if (fs.existsSync(dbPath)) {
-        const fileBuffer = fs.readFileSync(dbPath);
-        db = new SQL.Database(fileBuffer);
-    } else {
-        db = new SQL.Database();
+    if (!provinces || provinces.length === 0) {
+        console.log('📦 Seeding database with Nepal electoral data...');
+        await seedData();
     }
 
-    // Register custom function for Romanization
-    db.create_function('romanize', romanize);
-
-    initializeSchema();
-    seedData();
-    saveDatabase();
-
-    console.log('✅ Database initialized successfully!');
-    return db;
-}
-
-/**
- * Save database to file
- */
-function saveDatabase() {
-    const data = db.export();
-    const buffer = Buffer.from(data);
-    fs.writeFileSync(dbPath, buffer);
-}
-
-/**
- * Initialize database schema
- */
-function initializeSchema() {
-    db.run(`
-        CREATE TABLE IF NOT EXISTS provinces (
-            id INTEGER PRIMARY KEY,
-            name_en TEXT NOT NULL,
-            name_np TEXT
-        )
-    `);
-
-    db.run(`
-        CREATE TABLE IF NOT EXISTS districts (
-            id INTEGER PRIMARY KEY,
-            name_en TEXT NOT NULL,
-            name_np TEXT,
-            province_id INTEGER NOT NULL,
-            FOREIGN KEY (province_id) REFERENCES provinces(id)
-        )
-    `);
-
-    db.run(`
-        CREATE TABLE IF NOT EXISTS constituencies (
-            id INTEGER PRIMARY KEY,
-            name TEXT NOT NULL,
-            district_id INTEGER NOT NULL,
-            FOREIGN KEY (district_id) REFERENCES districts(id)
-        )
-    `);
-
-    db.run(`
-        CREATE TABLE IF NOT EXISTS candidates (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            party_name TEXT NOT NULL,
-            constituency_id INTEGER NOT NULL,
-            created_at TEXT DEFAULT (datetime('now')),
-            updated_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (constituency_id) REFERENCES constituencies(id)
-        )
-    `);
-
-    db.run(`
-        CREATE TABLE IF NOT EXISTS posts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            candidate_id INTEGER NOT NULL,
-            post_url TEXT,
-            published_date TEXT,
-            positive_percentage REAL DEFAULT 0,
-            negative_percentage REAL DEFAULT 0,
-            neutral_percentage REAL DEFAULT 0,
-            positive_remarks TEXT,
-            negative_remarks TEXT,
-            neutral_remarks TEXT,
-            conclusion TEXT,
-            created_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (candidate_id) REFERENCES candidates(id)
-        )
-    `);
-
-    db.run(`
-        CREATE TABLE IF NOT EXISTS comments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            post_id INTEGER NOT NULL,
-            content TEXT NOT NULL,
-            sentiment TEXT CHECK(sentiment IN ('positive', 'negative', 'neutral')),
-            created_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (post_id) REFERENCES posts(id)
-        )
-    `);
-
-    // Create indexes
-    try {
-        db.run(`CREATE INDEX IF NOT EXISTS idx_districts_province ON districts(province_id)`);
-        db.run(`CREATE INDEX IF NOT EXISTS idx_constituencies_district ON constituencies(district_id)`);
-        db.run(`CREATE INDEX IF NOT EXISTS idx_candidates_constituency ON candidates(constituency_id)`);
-        db.run(`CREATE INDEX IF NOT EXISTS idx_posts_candidate ON posts(candidate_id)`);
-        db.run(`CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id)`);
-    } catch (e) {
-        // Indexes may already exist
-    }
+    console.log('✅ Supabase database initialized successfully!');
+    return supabase;
 }
 
 /**
  * Seed initial Nepal electoral data
  */
-function seedData() {
-    const result = db.exec('SELECT COUNT(*) as count FROM provinces');
-    const count = result.length > 0 ? result[0].values[0][0] : 0;
+async function seedData() {
+    // Seed provinces
+    console.log('📦 Seeding provinces...');
+    const { error: provError } = await supabase
+        .from('provinces')
+        .upsert(provincesData, { onConflict: 'id' });
+    if (provError) console.error('Province seed error:', provError.message);
 
-    if (count === 0) {
-        console.log('📦 Seeding provinces...');
-        for (const p of provincesData) {
-            db.run('INSERT OR IGNORE INTO provinces (id, name_en, name_np) VALUES (?, ?, ?)', [p.id, p.name_en, p.name_np]);
-        }
+    // Seed districts
+    console.log('📦 Seeding districts...');
+    const { error: distError } = await supabase
+        .from('districts')
+        .upsert(districtsData, { onConflict: 'id' });
+    if (distError) console.error('District seed error:', distError.message);
 
-        console.log('📦 Seeding districts...');
-        for (const d of districtsData) {
-            db.run('INSERT OR IGNORE INTO districts (id, name_en, name_np, province_id) VALUES (?, ?, ?, ?)', [d.id, d.name_en, d.name_np, d.province_id]);
-        }
+    // Seed constituencies
+    console.log('📦 Seeding constituencies...');
+    const { error: constError } = await supabase
+        .from('constituencies')
+        .upsert(constituenciesData, { onConflict: 'id' });
+    if (constError) console.error('Constituency seed error:', constError.message);
 
-        console.log('📦 Seeding constituencies...');
-        for (const c of constituenciesData) {
-            db.run('INSERT OR IGNORE INTO constituencies (id, name, district_id) VALUES (?, ?, ?)', [c.id, c.name, c.district_id]);
-        }
-
-        console.log('✅ Database seeded with Nepal electoral data!');
-    }
-}
-
-/**
- * Helper to convert sql.js result to array of objects
- */
-function resultToObjects(result) {
-    if (!result || result.length === 0) return [];
-    const columns = result[0].columns;
-    return result[0].values.map(row => {
-        const obj = {};
-        columns.forEach((col, i) => obj[col] = row[i]);
-        return obj;
-    });
-}
-
-/**
- * Run a SELECT query and return array of objects
- */
-function query(sql, params = []) {
-    try {
-        const stmt = db.prepare(sql);
-        if (params.length > 0) {
-            stmt.bind(params);
-        }
-        const results = [];
-        while (stmt.step()) {
-            const row = stmt.getAsObject();
-            results.push(row);
-        }
-        stmt.free();
-        return results;
-    } catch (e) {
-        console.error('Query error:', sql, params, e);
-        return [];
-    }
-}
-
-/**
- * Run a statement that modifies data and return last insert ID
- */
-function runAndGetId(sql, params = []) {
-    try {
-        const stmt = db.prepare(sql);
-        if (params.length > 0) {
-            stmt.bind(params);
-        }
-        stmt.step();
-        stmt.free();
-
-        // Get last insert rowid immediately after insert
-        const result = db.exec('SELECT last_insert_rowid() as id');
-        const lastId = result.length > 0 ? result[0].values[0][0] : 0;
-
-        saveDatabase();
-        return lastId;
-    } catch (e) {
-        console.error('Run error:', sql, params, e);
-        saveDatabase();
-        return 0;
-    }
-}
-
-/**
- * Run a statement that modifies data (no return value needed)
- */
-function run(sql, params = []) {
-    try {
-        const stmt = db.prepare(sql);
-        if (params.length > 0) {
-            stmt.bind(params);
-        }
-        stmt.step();
-        stmt.free();
-        saveDatabase();
-    } catch (e) {
-        console.error('Run error:', sql, params, e);
-        saveDatabase();
-    }
-}
-
-/**
- * Get last insert row id (deprecated - use runAndGetId instead)
- */
-function getLastInsertId() {
-    const result = db.exec('SELECT last_insert_rowid() as id');
-    return result.length > 0 ? result[0].values[0][0] : 0;
-}
-
-/**
- * Get recent constituencies
- */
-function getRecentConstituencies(limit = 5) {
-    const stmt = db.prepare(`
-        SELECT 
-            con.id as constituency_id, 
-            con.name as constituency_name,
-            d.id as district_id,
-            d.name_en as district_name,
-            p.id as province_id,
-            p.name_en as province_name,
-            MAX(c.created_at) as last_updated
-        FROM candidates c
-        JOIN constituencies con ON c.constituency_id = con.id
-        JOIN districts d ON con.district_id = d.id
-        JOIN provinces p ON d.province_id = p.id
-        GROUP BY con.id
-        ORDER BY last_updated DESC
-        LIMIT $limit
-    `);
-
-    stmt.bind({ $limit: limit });
-
-    const results = [];
-    while (stmt.step()) {
-        results.push(stmt.getAsObject());
-    }
-    stmt.free();
-    return results;
+    console.log('✅ Database seeded with Nepal electoral data!');
 }
 
 // Export module functions
@@ -350,53 +142,160 @@ module.exports = {
     initDatabase,
 
     // Province queries
-    getAllProvinces: () => query('SELECT * FROM provinces ORDER BY id'),
+    getAllProvinces: async () => {
+        const { data, error } = await supabase
+            .from('provinces')
+            .select('*')
+            .order('id');
+        if (error) console.error('getAllProvinces error:', error.message);
+        return data || [];
+    },
 
     // District queries
-    getDistrictsByProvince: (provinceId) =>
-        query('SELECT * FROM districts WHERE province_id = ? ORDER BY name_en', [provinceId]),
+    getDistrictsByProvince: async (provinceId) => {
+        const { data, error } = await supabase
+            .from('districts')
+            .select('*')
+            .eq('province_id', provinceId)
+            .order('name_en');
+        if (error) console.error('getDistrictsByProvince error:', error.message);
+        return data || [];
+    },
 
     // Constituency queries
-    getConstituenciesByDistrict: (districtId) =>
-        query('SELECT * FROM constituencies WHERE district_id = ? ORDER BY name', [districtId]),
+    getConstituenciesByDistrict: async (districtId) => {
+        const { data, error } = await supabase
+            .from('constituencies')
+            .select('*')
+            .eq('district_id', districtId)
+            .order('name');
+        if (error) console.error('getConstituenciesByDistrict error:', error.message);
+        return data || [];
+    },
 
     // Candidate queries
-    getCandidatesByConstituency: (constituencyId) =>
-        query(`
-            SELECT c.*, 
-                   p.id as post_id, p.post_url, p.published_date,
-                   p.positive_percentage, p.negative_percentage, p.neutral_percentage,
-                   p.positive_remarks, p.negative_remarks, p.neutral_remarks, p.conclusion
-            FROM candidates c
-            LEFT JOIN posts p ON c.id = p.candidate_id
-            WHERE c.constituency_id = ?
-            ORDER BY c.created_at DESC
-        `, [constituencyId]),
+    getCandidatesByConstituency: async (constituencyId) => {
+        const { data, error } = await supabase
+            .from('candidates')
+            .select(`
+                *,
+                posts (
+                    id, post_url, published_date,
+                    positive_percentage, negative_percentage, neutral_percentage,
+                    positive_remarks, negative_remarks, neutral_remarks, conclusion
+                )
+            `)
+            .eq('constituency_id', constituencyId)
+            .order('created_at', { ascending: false });
 
-    getAllCandidatesWithPosts: () =>
-        query(`
-            SELECT c.*, 
-                   co.name as constituency_name,
-                   p.id as post_id, p.post_url, p.published_date,
-                   p.positive_percentage, p.negative_percentage, p.neutral_percentage,
-                   p.positive_remarks, p.negative_remarks, p.neutral_remarks, p.conclusion
-            FROM candidates c
-            LEFT JOIN constituencies co ON c.constituency_id = co.id
-            LEFT JOIN posts p ON c.id = p.candidate_id
-            WHERE p.id IS NOT NULL
-            ORDER BY p.created_at DESC
-        `),
+        if (error) {
+            console.error('getCandidatesByConstituency error:', error.message);
+            return [];
+        }
 
-    searchCandidates: (searchQuery) => {
+        // Flatten to match old format (one row per candidate with post info)
+        return (data || []).map(c => {
+            const post = c.posts && c.posts.length > 0 ? c.posts[0] : {};
+            return {
+                ...c,
+                post_id: post.id || null,
+                post_url: post.post_url || null,
+                published_date: post.published_date || null,
+                positive_percentage: post.positive_percentage || 0,
+                negative_percentage: post.negative_percentage || 0,
+                neutral_percentage: post.neutral_percentage || 0,
+                positive_remarks: post.positive_remarks || '',
+                negative_remarks: post.negative_remarks || '',
+                neutral_remarks: post.neutral_remarks || '',
+                conclusion: post.conclusion || ''
+            };
+        });
+    },
+
+    getAllCandidatesWithPosts: async () => {
+        const { data, error } = await supabase
+            .from('candidates')
+            .select(`
+                *,
+                constituencies!inner (
+                    id, name,
+                    districts!inner (
+                        id, name_en, name_np, province_id
+                    )
+                ),
+                posts!inner (
+                    id, post_url, published_date,
+                    positive_percentage, negative_percentage, neutral_percentage,
+                    positive_remarks, negative_remarks, neutral_remarks, conclusion,
+                    created_at
+                )
+            `)
+            .order('created_at', { foreignTable: 'posts', ascending: false });
+
+        if (error) {
+            console.error('getAllCandidatesWithPosts error:', error.message);
+            return [];
+        }
+
+        // Flatten to match old format
+        return (data || []).map(c => {
+            const post = c.posts && c.posts.length > 0 ? c.posts[0] : {};
+            const con = c.constituencies || {};
+            const dist = con.districts || {};
+            return {
+                ...c,
+                constituency_name: con.name,
+                district_id: dist.id,
+                province_id: dist.province_id,
+                post_id: post.id || null,
+                post_url: post.post_url || null,
+                published_date: post.published_date || null,
+                positive_percentage: post.positive_percentage || 0,
+                negative_percentage: post.negative_percentage || 0,
+                neutral_percentage: post.neutral_percentage || 0,
+                positive_remarks: post.positive_remarks || '',
+                negative_remarks: post.negative_remarks || '',
+                neutral_remarks: post.neutral_remarks || '',
+                conclusion: post.conclusion || ''
+            };
+        });
+    },
+
+    searchCandidates: async (searchQuery) => {
         try {
-            // Fetch all data for filtering (JS filtering is safer and more flexible)
-            const results = query(`
-                SELECT c.*, co.name as constituency_name, d.name_en as district_name, d.name_np as district_name_np, pr.name_en as province_name
-                FROM candidates c
-                JOIN constituencies co ON c.constituency_id = co.id
-                JOIN districts d ON co.district_id = d.id
-                JOIN provinces pr ON d.province_id = pr.id
-            `);
+            // Fetch all candidates with their location info
+            const { data, error } = await supabase
+                .from('candidates')
+                .select(`
+                    *,
+                    constituencies (
+                        name,
+                        districts (
+                            name_en, name_np,
+                            provinces (name_en)
+                        )
+                    )
+                `)
+                .limit(200);
+
+            if (error) {
+                console.error('searchCandidates error:', error.message);
+                return [];
+            }
+
+            // Flatten data
+            const results = (data || []).map(c => {
+                const con = c.constituencies || {};
+                const dist = con.districts || {};
+                const prov = dist.provinces || {};
+                return {
+                    ...c,
+                    constituency_name: con.name,
+                    district_name: dist.name_en,
+                    district_name_np: dist.name_np,
+                    province_name: prov.name_en
+                };
+            });
 
             if (!searchQuery) return results.slice(0, 50);
 
@@ -420,7 +319,7 @@ module.exports = {
                 // Check phonetic/romanized matches
                 const rName = romanize(row.name);
                 const rDistNp = romanize(distNp);
-                const rConst = romanize(row.constituency_name); // In case constituency name is Nepali
+                const rConst = romanize(row.constituency_name);
 
                 if (rName.includes(q) || rName.includes(romanizedQ)) return true;
                 if (rDistNp.includes(q) || rDistNp.includes(romanizedQ)) return true;
@@ -434,80 +333,234 @@ module.exports = {
         }
     },
 
-    createCandidate: (data) => {
-        return runAndGetId(`INSERT INTO candidates (name, party_name, constituency_id) VALUES (?, ?, ?)`,
-            [data.name, data.party_name, data.constituency_id]);
+    createCandidate: async (data) => {
+        const { data: result, error } = await supabase
+            .from('candidates')
+            .insert({
+                name: data.name,
+                party_name: data.party_name,
+                constituency_id: data.constituency_id
+            })
+            .select('id')
+            .single();
+
+        if (error) {
+            console.error('createCandidate error:', error.message);
+            return 0;
+        }
+        return result?.id || 0;
     },
 
-    updateCandidate: (id, data) => {
-        run(`UPDATE candidates SET name = ?, party_name = ?, updated_at = datetime('now') WHERE id = ?`,
-            [data.name, data.party_name, id]);
+    updateCandidate: async (id, data) => {
+        const { error } = await supabase
+            .from('candidates')
+            .update({
+                name: data.name,
+                party_name: data.party_name,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', id);
+
+        if (error) console.error('updateCandidate error:', error.message);
     },
 
-    deleteCandidate: (id) => {
-        run('DELETE FROM posts WHERE candidate_id = ?', [id]);
-        run('DELETE FROM candidates WHERE id = ?', [id]);
+    deleteCandidate: async (id) => {
+        // Posts will be deleted via CASCADE
+        const { error } = await supabase
+            .from('candidates')
+            .delete()
+            .eq('id', id);
+
+        if (error) console.error('deleteCandidate error:', error.message);
     },
 
     // Post queries
-    createPost: (data) => {
-        return runAndGetId(`INSERT INTO posts (candidate_id, post_url, published_date, positive_percentage, negative_percentage, neutral_percentage, positive_remarks, negative_remarks, neutral_remarks, conclusion)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [data.candidate_id, data.post_url, data.published_date,
-            data.positive_percentage || 0, data.negative_percentage || 0, data.neutral_percentage || 0,
-            data.positive_remarks || '', data.negative_remarks || '', data.neutral_remarks || '', data.conclusion || '']);
+    createPost: async (data) => {
+        const { data: result, error } = await supabase
+            .from('posts')
+            .insert({
+                candidate_id: data.candidate_id,
+                post_url: data.post_url,
+                published_date: data.published_date,
+                positive_percentage: data.positive_percentage || 0,
+                negative_percentage: data.negative_percentage || 0,
+                neutral_percentage: data.neutral_percentage || 0,
+                positive_remarks: data.positive_remarks || '',
+                negative_remarks: data.negative_remarks || '',
+                neutral_remarks: data.neutral_remarks || '',
+                conclusion: data.conclusion || ''
+            })
+            .select('id')
+            .single();
+
+        if (error) {
+            console.error('createPost error:', error.message);
+            return 0;
+        }
+        return result?.id || 0;
     },
 
-    updatePost: (id, data) => {
-        run(`UPDATE posts SET post_url = ?, published_date = ?, 
-             positive_percentage = ?, negative_percentage = ?, neutral_percentage = ?,
-             positive_remarks = ?, negative_remarks = ?, neutral_remarks = ?, conclusion = ? WHERE id = ?`,
-            [data.post_url, data.published_date, data.positive_percentage,
-            data.negative_percentage, data.neutral_percentage,
-            data.positive_remarks, data.negative_remarks, data.neutral_remarks, data.conclusion, id]);
+    updatePost: async (id, data) => {
+        const { error } = await supabase
+            .from('posts')
+            .update({
+                post_url: data.post_url,
+                published_date: data.published_date,
+                positive_percentage: data.positive_percentage,
+                negative_percentage: data.negative_percentage,
+                neutral_percentage: data.neutral_percentage,
+                positive_remarks: data.positive_remarks,
+                negative_remarks: data.negative_remarks,
+                neutral_remarks: data.neutral_remarks,
+                conclusion: data.conclusion
+            })
+            .eq('id', id);
+
+        if (error) console.error('updatePost error:', error.message);
     },
 
-    deletePost: (id) => {
-        run('DELETE FROM comments WHERE post_id = ?', [id]);
-        run('DELETE FROM posts WHERE id = ?', [id]);
+    deletePost: async (id) => {
+        // Comments will be deleted via CASCADE
+        const { error } = await supabase
+            .from('posts')
+            .delete()
+            .eq('id', id);
+
+        if (error) console.error('deletePost error:', error.message);
     },
 
-    getPostsByCandidate: (candidateId) =>
-        query('SELECT * FROM posts WHERE candidate_id = ? ORDER BY published_date DESC', [candidateId]),
+    getPostsByCandidate: async (candidateId) => {
+        const { data, error } = await supabase
+            .from('posts')
+            .select('*')
+            .eq('candidate_id', candidateId)
+            .order('published_date', { ascending: false });
+
+        if (error) console.error('getPostsByCandidate error:', error.message);
+        return data || [];
+    },
 
     // Comment queries
-    getCommentsByPost: (postId, sentiment = null) => {
+    getCommentsByPost: async (postId, sentiment = null) => {
+        let query = supabase
+            .from('comments')
+            .select('*')
+            .eq('post_id', postId)
+            .order('created_at', { ascending: false });
+
         if (sentiment) {
-            return query('SELECT * FROM comments WHERE post_id = ? AND sentiment = ? ORDER BY created_at DESC', [postId, sentiment]);
+            query = query.eq('sentiment', sentiment);
         }
-        return query('SELECT * FROM comments WHERE post_id = ? ORDER BY created_at DESC', [postId]);
+
+        const { data, error } = await query;
+        if (error) console.error('getCommentsByPost error:', error.message);
+        return data || [];
     },
 
-    createComment: (data) => {
-        return runAndGetId('INSERT INTO comments (post_id, content, sentiment) VALUES (?, ?, ?)',
-            [data.post_id, data.content, data.sentiment]);
+    createComment: async (data) => {
+        const { data: result, error } = await supabase
+            .from('comments')
+            .insert({
+                post_id: data.post_id,
+                content: data.content,
+                sentiment: data.sentiment
+            })
+            .select('id')
+            .single();
+
+        if (error) {
+            console.error('createComment error:', error.message);
+            return 0;
+        }
+        return result?.id || 0;
     },
 
-    deleteComment: (id) => {
-        run('DELETE FROM comments WHERE id = ?', [id]);
+    deleteComment: async (id) => {
+        const { error } = await supabase
+            .from('comments')
+            .delete()
+            .eq('id', id);
+
+        if (error) console.error('deleteComment error:', error.message);
     },
 
     // Analytics
-    getSentimentSummaryByConstituency: (constituencyId) =>
-        query(`
-            SELECT 
-                c.party_name,
-                c.name as candidate_name,
-                AVG(p.positive_percentage) as avg_positive,
-                AVG(p.negative_percentage) as avg_negative,
-                AVG(p.neutral_percentage) as avg_neutral,
-                COUNT(p.id) as post_count
-            FROM candidates c
-            LEFT JOIN posts p ON c.id = p.candidate_id
-            WHERE c.constituency_id = ?
-        GROUP BY c.id
-            ORDER BY c.party_name
-        `, [constituencyId]),
+    getSentimentSummaryByConstituency: async (constituencyId) => {
+        const { data, error } = await supabase
+            .from('candidates')
+            .select(`
+                id, name, party_name,
+                posts (
+                    positive_percentage,
+                    negative_percentage,
+                    neutral_percentage
+                )
+            `)
+            .eq('constituency_id', constituencyId);
 
-    getRecentConstituencies
+        if (error) {
+            console.error('getSentimentSummaryByConstituency error:', error.message);
+            return [];
+        }
+
+        // Calculate averages
+        return (data || []).map(c => {
+            const posts = c.posts || [];
+            const postCount = posts.length;
+            const avgPositive = postCount > 0 ? posts.reduce((s, p) => s + (p.positive_percentage || 0), 0) / postCount : 0;
+            const avgNegative = postCount > 0 ? posts.reduce((s, p) => s + (p.negative_percentage || 0), 0) / postCount : 0;
+            const avgNeutral = postCount > 0 ? posts.reduce((s, p) => s + (p.neutral_percentage || 0), 0) / postCount : 0;
+
+            return {
+                party_name: c.party_name,
+                candidate_name: c.name,
+                avg_positive: avgPositive,
+                avg_negative: avgNegative,
+                avg_neutral: avgNeutral,
+                post_count: postCount
+            };
+        });
+    },
+
+    getRecentConstituencies: async (limit = 5) => {
+        const { data, error } = await supabase
+            .from('candidates')
+            .select(`
+                created_at,
+                constituencies!inner (
+                    id, name,
+                    districts!inner (
+                        id, name_en,
+                        provinces!inner (id, name_en)
+                    )
+                )
+            `)
+            .order('created_at', { ascending: false })
+            .limit(50);
+
+        if (error) {
+            console.error('getRecentConstituencies error:', error.message);
+            return [];
+        }
+
+        // Group by constituency and get the most recent
+        const seen = new Map();
+        for (const c of data || []) {
+            const con = c.constituencies;
+            if (!seen.has(con.id)) {
+                seen.set(con.id, {
+                    constituency_id: con.id,
+                    constituency_name: con.name,
+                    district_id: con.districts.id,
+                    district_name: con.districts.name_en,
+                    province_id: con.districts.provinces.id,
+                    province_name: con.districts.provinces.name_en,
+                    last_updated: c.created_at
+                });
+            }
+            if (seen.size >= limit) break;
+        }
+
+        return Array.from(seen.values());
+    }
 };

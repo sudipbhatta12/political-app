@@ -3,6 +3,8 @@
  * REST API for Nepal election candidate sentiment tracking
  */
 
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -19,9 +21,9 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 // ============================================
 // Province Routes
 // ============================================
-app.get('/api/provinces', (req, res) => {
+app.get('/api/provinces', async (req, res) => {
     try {
-        const provinces = db.getAllProvinces();
+        const provinces = await db.getAllProvinces();
         res.json(provinces);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -31,9 +33,9 @@ app.get('/api/provinces', (req, res) => {
 // ============================================
 // District Routes
 // ============================================
-app.get('/api/districts/:provinceId', (req, res) => {
+app.get('/api/districts/:provinceId', async (req, res) => {
     try {
-        const districts = db.getDistrictsByProvince(parseInt(req.params.provinceId));
+        const districts = await db.getDistrictsByProvince(parseInt(req.params.provinceId));
         res.json(districts);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -43,18 +45,18 @@ app.get('/api/districts/:provinceId', (req, res) => {
 // ============================================
 // Constituency Routes
 // ============================================
-app.get('/api/recent-constituencies', (req, res) => {
+app.get('/api/recent-constituencies', async (req, res) => {
     try {
-        const constituencies = db.getRecentConstituencies();
+        const constituencies = await db.getRecentConstituencies();
         res.json(constituencies);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-app.get('/api/constituencies/:districtId', (req, res) => {
+app.get('/api/constituencies/:districtId', async (req, res) => {
     try {
-        const constituencies = db.getConstituenciesByDistrict(parseInt(req.params.districtId));
+        const constituencies = await db.getConstituenciesByDistrict(parseInt(req.params.districtId));
         res.json(constituencies);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -66,17 +68,17 @@ app.get('/api/constituencies/:districtId', (req, res) => {
 // ============================================
 
 // Get candidates by constituency
-app.get('/api/candidates', (req, res) => {
+app.get('/api/candidates', async (req, res) => {
     try {
         const { constituency_id, search } = req.query;
 
         if (search) {
-            const candidates = db.searchCandidates(search);
+            const candidates = await db.searchCandidates(search);
             return res.json(candidates);
         }
 
         if (constituency_id) {
-            const candidates = db.getCandidatesByConstituency(parseInt(constituency_id));
+            const candidates = await db.getCandidatesByConstituency(parseInt(constituency_id));
             // Group posts by candidate
             const candidatesMap = new Map();
             for (const row of candidates) {
@@ -116,9 +118,9 @@ app.get('/api/candidates', (req, res) => {
 });
 
 // Get all candidates with posts (Library view)
-app.get('/api/library', (req, res) => {
+app.get('/api/library', async (req, res) => {
     try {
-        const allCandidates = db.getAllCandidatesWithPosts();
+        const allCandidates = await db.getAllCandidatesWithPosts();
 
         // Transform to include constituency name and single post object
         const result = allCandidates.map(row => ({
@@ -126,6 +128,8 @@ app.get('/api/library', (req, res) => {
             name: row.name,
             party_name: row.party_name,
             constituency_id: row.constituency_id,
+            district_id: row.district_id,
+            province_id: row.province_id,
             constituency_name: row.constituency_name,
             post: row.post_id ? {
                 id: row.post_id,
@@ -148,7 +152,7 @@ app.get('/api/library', (req, res) => {
 });
 
 // Create candidate
-app.post('/api/candidates', (req, res) => {
+app.post('/api/candidates', async (req, res) => {
     try {
         const { name, party_name, constituency_id } = req.body;
 
@@ -157,13 +161,13 @@ app.post('/api/candidates', (req, res) => {
         }
 
         // Check if constituency already has 5 candidates
-        const existingCandidates = db.getCandidatesByConstituency(constituency_id);
+        const existingCandidates = await db.getCandidatesByConstituency(constituency_id);
         const uniqueCandidates = new Set(existingCandidates.map(c => c.id));
         if (uniqueCandidates.size >= 5) {
             return res.status(400).json({ error: 'Maximum 5 candidates per constituency allowed' });
         }
 
-        const candidateId = db.createCandidate({ name, party_name, constituency_id });
+        const candidateId = await db.createCandidate({ name, party_name, constituency_id });
         res.status(201).json({ id: candidateId, message: 'Candidate created successfully' });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -171,10 +175,10 @@ app.post('/api/candidates', (req, res) => {
 });
 
 // Update candidate
-app.put('/api/candidates/:id', (req, res) => {
+app.put('/api/candidates/:id', async (req, res) => {
     try {
         const { name, party_name } = req.body;
-        db.updateCandidate(parseInt(req.params.id), { name, party_name });
+        await db.updateCandidate(parseInt(req.params.id), { name, party_name });
         res.json({ message: 'Candidate updated successfully' });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -182,9 +186,9 @@ app.put('/api/candidates/:id', (req, res) => {
 });
 
 // Delete candidate
-app.delete('/api/candidates/:id', (req, res) => {
+app.delete('/api/candidates/:id', async (req, res) => {
     try {
-        db.deleteCandidate(parseInt(req.params.id));
+        await db.deleteCandidate(parseInt(req.params.id));
         res.json({ message: 'Candidate deleted successfully' });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -196,9 +200,9 @@ app.delete('/api/candidates/:id', (req, res) => {
 // ============================================
 
 // Get posts by candidate
-app.get('/api/candidates/:candidateId/posts', (req, res) => {
+app.get('/api/candidates/:candidateId/posts', async (req, res) => {
     try {
-        const posts = db.getPostsByCandidate(parseInt(req.params.candidateId));
+        const posts = await db.getPostsByCandidate(parseInt(req.params.candidateId));
         res.json(posts);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -206,7 +210,7 @@ app.get('/api/candidates/:candidateId/posts', (req, res) => {
 });
 
 // Create post
-app.post('/api/posts', (req, res) => {
+app.post('/api/posts', async (req, res) => {
     try {
         const {
             candidate_id, post_url, published_date,
@@ -224,7 +228,7 @@ app.post('/api/posts', (req, res) => {
             return res.status(400).json({ error: 'Sentiment percentages should add up to 100%' });
         }
 
-        const postId = db.createPost({
+        const postId = await db.createPost({
             candidate_id,
             post_url,
             published_date,
@@ -244,14 +248,14 @@ app.post('/api/posts', (req, res) => {
 });
 
 // Update post
-app.put('/api/posts/:id', (req, res) => {
+app.put('/api/posts/:id', async (req, res) => {
     try {
         const {
             post_url, published_date,
             positive_percentage, negative_percentage, neutral_percentage,
             positive_remarks, negative_remarks, neutral_remarks, conclusion
         } = req.body;
-        db.updatePost(parseInt(req.params.id), {
+        await db.updatePost(parseInt(req.params.id), {
             post_url,
             published_date,
             positive_percentage,
@@ -269,9 +273,9 @@ app.put('/api/posts/:id', (req, res) => {
 });
 
 // Delete post
-app.delete('/api/posts/:id', (req, res) => {
+app.delete('/api/posts/:id', async (req, res) => {
     try {
-        db.deletePost(parseInt(req.params.id));
+        await db.deletePost(parseInt(req.params.id));
         res.json({ message: 'Post deleted successfully' });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -283,10 +287,10 @@ app.delete('/api/posts/:id', (req, res) => {
 // ============================================
 
 // Get comments for a post
-app.get('/api/posts/:postId/comments', (req, res) => {
+app.get('/api/posts/:postId/comments', async (req, res) => {
     try {
         const { sentiment } = req.query;
-        const comments = db.getCommentsByPost(parseInt(req.params.postId), sentiment);
+        const comments = await db.getCommentsByPost(parseInt(req.params.postId), sentiment);
         res.json(comments);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -294,7 +298,7 @@ app.get('/api/posts/:postId/comments', (req, res) => {
 });
 
 // Create comment
-app.post('/api/posts/:postId/comments', (req, res) => {
+app.post('/api/posts/:postId/comments', async (req, res) => {
     try {
         const { content, sentiment } = req.body;
 
@@ -306,7 +310,7 @@ app.post('/api/posts/:postId/comments', (req, res) => {
             return res.status(400).json({ error: 'Sentiment must be positive, negative, or neutral' });
         }
 
-        const commentId = db.createComment({
+        const commentId = await db.createComment({
             post_id: parseInt(req.params.postId),
             content,
             sentiment
@@ -319,9 +323,9 @@ app.post('/api/posts/:postId/comments', (req, res) => {
 });
 
 // Delete comment
-app.delete('/api/comments/:id', (req, res) => {
+app.delete('/api/comments/:id', async (req, res) => {
     try {
-        db.deleteComment(parseInt(req.params.id));
+        await db.deleteComment(parseInt(req.params.id));
         res.json({ message: 'Comment deleted successfully' });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -333,9 +337,9 @@ app.delete('/api/comments/:id', (req, res) => {
 // ============================================
 
 // Get sentiment summary for a constituency
-app.get('/api/analytics/constituency/:id', (req, res) => {
+app.get('/api/analytics/constituency/:id', async (req, res) => {
     try {
-        const summary = db.getSentimentSummaryByConstituency(parseInt(req.params.id));
+        const summary = await db.getSentimentSummaryByConstituency(parseInt(req.params.id));
         res.json(summary);
     } catch (error) {
         res.status(500).json({ error: error.message });
