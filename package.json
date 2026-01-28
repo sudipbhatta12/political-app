@@ -1,0 +1,27 @@
+{
+  "name": "political-social-media-assessment",
+  "version": "1.0.0",
+  "description": "Dashboard for tracking and analyzing social media sentiment of political candidates in Nepal's elections",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node server/server.js"
+  },
+  "keywords": [
+    "nepal",
+    "elections",
+    "sentiment",
+    "analysis",
+    "politics"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "sql.js": "^1.10.2",
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

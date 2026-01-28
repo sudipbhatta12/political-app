@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Political Social Media Assessment - Nepal Elections</title>
+    <meta name="description"
+        content="Track and analyze social media sentiment of political candidates in Nepal's elections">
+
+    <!-- Fonts - Premium Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+
+    <!-- Lucide Icons - Premium SVG Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="index.css">
+
+    <!-- ApexCharts -->
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
+    <!-- jsPDF for PDF Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.1/jspdf.plugin.autotable.min.js"></script>
+
+    <!-- SheetJS for Excel Export -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+</head>
+
+<body>
+    <!-- Background Animation Canvas -->
+    <canvas id="bg-canvas"></canvas>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header__brand" id="homeBtn" style="cursor: pointer;">
+            <i data-lucide="bar-chart-3" class="header__icon"></i>
+            <div>
+                <h1 class="header__title">Political Social Media Assessment</h1>
+                <p class="header__subtitle">Nepal Elections Sentiment Tracker</p>
+            </div>
+        </div>
+        <div class="header__actions">
+            <button class="btn btn--secondary" id="libraryBtn">
+                <i data-lucide="library" class="btn__icon"></i>
+                <span>Library</span>
+            </button>
+            <button class="btn btn--primary" id="addCandidateBtn">
+                <i data-lucide="plus" class="btn__icon"></i>
+                <span>Add Post Data</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Filters Section -->
+        <section class="filters">
+            <div class="filters__search">
+                <div class="search-box">
+                    <i data-lucide="search" class="search-box__icon"></i>
+                    <input type="text" class="search-box__input" id="searchInput"
+                        placeholder="Search candidates by name or party...">
+                    <ul id="searchSuggestions" class="search-suggestions"></ul>
+                </div>
+            </div>
+            <div class="filters__dropdowns">
+                <div class="form-group">
+                    <label class="form-group__label">Province</label>
+                    <select class="form-group__select" id="provinceSelect">
+                        <option value="">Select Province</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-group__label">District</label>
+                    <select class="form-group__select" id="districtSelect" disabled>
+                        <option value="">Select District</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-group__label">Election Constituency</label>
+                    <select class="form-group__select" id="constituencySelect" disabled>
+                        <option value="">Select Constituency</option>
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <!-- Party Cards Grid -->
+        <section class="party-grid" id="partyGrid">
+            <!-- Cards will be dynamically inserted here -->
+            <div class="empty-state" id="emptyState">
+                <i data-lucide="bar-chart-big"
+                    style="width: 64px; height: 64px; opacity: 0.5; color: var(--accent-primary);"></i>
+                <h3 class="empty-state__title">No Candidates to Display</h3>
+                <p class="empty-state__subtitle">Select a constituency or search to view analysis</p>
+
+                <!-- Recently Updated -->
+                <div id="recentConstituencies" class="recent-updates" style="display: none;">
+                    <p class="recent-updates__title">Recently Updated</p>
+                    <div class="recent-tags" id="recentTags"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Combined Sentiment Analysis -->
+        <section class="summary-section" id="summarySection" style="display: none;">
+            <h2 class="summary-section__title">
+                <i data-lucide="bar-chart-2" style="width: 20px; height: 20px;"></i>
+                Combined Sentiment Analysis
+            </h2>
+            <div class="summary-section__chart" id="summaryChart"></div>
+        </section>
+
+        <!-- Winner Section -->
+        <section class="winner-section" id="winnerSection" style="display: none;">
+            <div class="winner-header">
+                <div class="winner-badge">
+                    <i data-lucide="trophy" class="winner-badge__icon"></i>
+                    <span>Leading Candidate</span>
+                </div>
+            </div>
+            <div class="winner-content">
+                <div class="winner-info">
+                    <div class="winner-card">
+                        <h3 class="winner-card__name" id="winnerName">-</h3>
+                        <p class="winner-card__party" id="winnerParty">-</p>
+                        <div class="winner-stats">
+                            <div class="winner-stat winner-stat--positive">
+                                <span class="winner-stat__value" id="winnerPositive">0%</span>
+                                <span class="winner-stat__label">Positive</span>
+                            </div>
+                            <div class="winner-stat winner-stat--negative">
+                                <span class="winner-stat__value" id="winnerNegative">0%</span>
+                                <span class="winner-stat__label">Negative</span>
+                            </div>
+                            <div class="winner-stat winner-stat--neutral">
+                                <span class="winner-stat__value" id="winnerNeutral">0%</span>
+                                <span class="winner-stat__label">Neutral</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="winner-chart" id="winnerChart"></div>
+                </div>
+                <div class="winner-remarks">
+                    <h4 class="winner-remarks__title">
+                        <i data-lucide="message-square" style="width: 16px; height: 16px;"></i>
+                        Detailed Analysis
+                    </h4>
+                    <div class="winner-remarks__grid">
+                        <div class="winner-remark winner-remark--positive">
+                            <h5>Positive Remarks</h5>
+                            <p id="winnerPositiveRemarks">No remarks available</p>
+                        </div>
+                        <div class="winner-remark winner-remark--negative">
+                            <h5>Negative Remarks</h5>
+                            <p id="winnerNegativeRemarks">No remarks available</p>
+                        </div>
+                        <div class="winner-remark winner-remark--neutral">
+                            <h5>Neutral Remarks</h5>
+                            <p id="winnerNeutralRemarks">No remarks available</p>
+                        </div>
+                        <div class="winner-remark winner-remark--conclusion">
+                            <h5>Conclusion</h5>
+                            <p id="winnerConclusion">No conclusion available</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Add/Edit Candidate Modal -->
+    <div class="modal-overlay" id="candidateModal">
+        <div class="modal">
+            <div class="modal__header">
+                <h3 class="modal__title" id="modalTitle">Add Candidate</h3>
+                <button class="modal__close" id="modalClose">&times;</button>
+            </div>
+            <div class="modal__body">
+                <form id="candidateForm" class="form-grid">
+                    <input type="hidden" id="candidateId">
+                    <input type="hidden" id="postId">
+
+                    <!-- Location Selection -->
+                    <div class="form-row">
+                        <label for="modalProvince">Province *</label>
+                        <select id="modalProvince" required>
+                            <option value="">Select Province</option>
+                        </select>
+                    </div>
+
+                    <div class="form-grid form-grid--2col">
+                        <div class="form-row">
+                            <label for="modalDistrict">District *</label>
+                            <select id="modalDistrict" required disabled>
+                                <option value="">Select District</option>
+                            </select>
+                        </div>
+                        <div class="form-row">
+                            <label for="modalConstituency">Constituency *</label>
+                            <select id="modalConstituency" required disabled>
+                                <option value="">Select Constituency</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <hr style="border-color: var(--border-glass);">
+
+                    <!-- Candidate Selector -->
+                    <div class="form-row">
+                        <label for="candidateSelect">Select Candidate *</label>
+                        <select id="candidateSelect" required disabled>
+                            <option value="">-- Select a Candidate --</option>
+                        </select>
+                        <small class="text-muted mt-1">Choose from imported candidates</small>
+                    </div>
+
+                    <!-- Candidate Info (Editable after auto-fill) -->
+                    <div class="form-grid form-grid--2col">
+                        <div class="form-row">
+                            <label for="candidateName">Candidate Name</label>
+                            <input type="text" id="candidateName" placeholder="Auto-filled from selection">
+                        </div>
+                        <div class="form-row">
+                            <label for="partyName">Party Name</label>
+                            <input type="text" id="partyName" placeholder="Auto-filled from selection">
+                        </div>
+                    </div>
+
+                    <hr style="border-color: var(--border-glass);">
+
+                    <!-- Post Info -->
+                    <div class="form-row">
+                        <label for="postUrl">Post URL</label>
+                        <input type="url" id="postUrl" placeholder="https://facebook.com/...">
+                    </div>
+
+                    <div class="form-row">
+                        <label for="publishedDate">Published Date</label>
+                        <input type="date" id="publishedDate">
+                    </div>
+
+                    <!-- Sentiment Percentages -->
+                    <div class="form-row">
+                        <label>Sentiment Analysis (%)</label>
+                        <div class="sentiment-inputs">
+                            <div class="sentiment-input sentiment-input--positive">
+                                <label for="positivePercent">Positive</label>
+                                <input type="number" id="positivePercent" min="0" max="100" step="0.01" value="0">
+                            </div>
+                            <div class="sentiment-input sentiment-input--negative">
+                                <label for="negativePercent">Negative</label>
+                                <input type="number" id="negativePercent" min="0" max="100" step="0.01" value="0">
+                            </div>
+                            <div class="sentiment-input sentiment-input--neutral">
+                                <label for="neutralPercent">Neutral</label>
+                                <input type="number" id="neutralPercent" min="0" max="100" step="0.01" value="0">
+                            </div>
+                        </div>
+                        <small class="text-muted mt-1">Total should equal 100%</small>
+                    </div>
+
+                    <!-- Remarks Section -->
+                    <div class="form-row">
+                        <label for="positiveRemarks">Positive Remarks</label>
+                        <textarea id="positiveRemarks" rows="2"
+                            placeholder="What is positive about this candidate?"></textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <label for="negativeRemarks">Negative Remarks</label>
+                        <textarea id="negativeRemarks" rows="2"
+                            placeholder="What is negative about this candidate?"></textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <label for="neutralRemarks">Neutral Remarks</label>
+                        <textarea id="neutralRemarks" rows="2"
+                            placeholder="What is neutral about this candidate?"></textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <label for="conclusion">Conclusion</label>
+                        <textarea id="conclusion" rows="3"
+                            placeholder="Overall conclusion about this candidate..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal__footer">
+                <button type="button" class="btn btn--secondary" id="modalCancel">Cancel</button>
+                <button type="submit" form="candidateForm" class="btn btn--primary">Save Post Data</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Comments Modal -->
+    <div class="modal-overlay comments-modal" id="commentsModal">
+        <div class="modal">
+            <div class="modal__header">
+                <h3 class="modal__title" id="commentsTitle">Comments</h3>
+                <button class="modal__close" id="commentsModalClose">&times;</button>
+            </div>
+            <div class="modal__body">
+                <div class="comments-list" id="commentsList">
+                    <!-- Comments will be inserted here -->
+                </div>
+                <div class="add-comment-form">
+                    <input type="text" id="newCommentInput" placeholder="Add a comment...">
+                    <select id="commentSentiment">
+                        <option value="positive">Positive</option>
+                        <option value="negative">Negative</option>
+                        <option value="neutral">Neutral</option>
+                    </select>
+                    <button class="btn btn--primary btn--small" id="addCommentBtn">Add</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Remarks Modal (for viewing remarks when clicking percentage buttons) -->
+    <div class="modal-overlay remarks-modal" id="remarksModal">
+        <div class="modal">
+            <div class="modal__header">
+                <h3 class="modal__title" id="remarksTitle">Remarks</h3>
+                <button class="modal__close" id="remarksModalClose">&times;</button>
+            </div>
+            <div class="modal__body">
+                <div id="remarksContent" class="remarks-content">
+                    <!-- Remarks content will be inserted here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Library Modal -->
+    <div class="modal-overlay library-modal" id="libraryModal">
+        <div class="modal modal--large">
+            <div class="modal__header">
+                <h3 class="modal__title">
+                    <i data-lucide="library" style="width: 20px; height: 20px;"></i>
+                    Saved Assessments Library
+                </h3>
+                <button class="modal__close" id="libraryModalClose">&times;</button>
+            </div>
+            <div class="modal__body">
+                <div class="library-actions">
+                    <div class="library-actions__left">
+                        <span class="library-count" id="libraryCount">0 records</span>
+                        <div class="library-filter-group">
+                            <input type="date" id="libraryDateFilter" class="library-date-filter"
+                                title="Filter by date">
+                            <button id="clearLibraryFilter" class="btn btn--icon btn--secondary btn--small"
+                                title="Clear filter" style="display: none;">
+                                <i data-lucide="x"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="library-actions__right">
+                        <button class="btn btn--small btn--secondary" id="exportAllExcel">
+                            <i data-lucide="file-spreadsheet" style="width: 14px; height: 14px;"></i>
+                            Export All (Excel)
+                        </button>
+                        <button class="btn btn--small btn--secondary" id="exportAllPdf">
+                            <i data-lucide="file-text" style="width: 14px; height: 14px;"></i>
+                            Export All (PDF)
+                        </button>
+                    </div>
+                </div>
+                <div class="library-table-container">
+                    <table class="library-table" id="libraryTable">
+                        <thead>
+                            <tr>
+                                <th>Candidate</th>
+                                <th>Party</th>
+                                <th>Constituency</th>
+                                <th>Positive</th>
+                                <th>Negative</th>
+                                <th>Neutral</th>
+                                <th>Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="libraryTableBody">
+                            <!-- Library data will be inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="library-empty" id="libraryEmpty" style="display: none;">
+                    <i data-lucide="inbox" style="width: 48px; height: 48px; opacity: 0.4;"></i>
+                    <p>No saved assessments yet</p>
+                    <p class="text-muted">Add post data to see it here</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Post Preview Modal -->
+    <div class="modal-overlay post-preview-modal" id="postPreviewModal">
+        <div class="modal modal--large">
+            <div class="modal__header">
+                <h3 class="modal__title" id="postPreviewTitle">
+                    <i data-lucide="play-circle" style="width: 20px; height: 20px;"></i>
+                    Post Preview
+                </h3>
+                <div class="modal__header-actions">
+                    <a href="#" target="_blank" rel="noopener" class="btn btn--small btn--secondary" id="openInNewTab">
+                        <i data-lucide="external-link" style="width: 14px; height: 14px;"></i>
+                        Open in New Tab
+                    </a>
+                    <button class="modal__close" id="postPreviewModalClose">&times;</button>
+                </div>
+            </div>
+            <div class="modal__body">
+                <div class="post-preview-container" id="postPreviewContainer">
+                    <div class="post-preview-loading" id="postPreviewLoading">
+                        <div class="spinner"></div>
+                        <p>Loading post...</p>
+                    </div>
+                    <iframe id="postPreviewIframe" class="post-preview-iframe" allowfullscreen></iframe>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <!-- PDF Export Container -->
+    <div id="pdf-export-container"
+        style="position: absolute; left: -9999px; top: 0; width: 595px; background: white; padding: 40px; box-sizing: border-box; font-family: 'Noto Sans Devanagari', sans-serif;">
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <!-- Background Script -->
+    <script src="background.js"></script>
+
+    <!-- App Script -->
+    <script src="app.js"></script>
+
+    <!-- Initialize Lucide Icons -->
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+
+</html>
