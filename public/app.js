@@ -290,7 +290,15 @@ async function loadConstituencies(districtId, constituencySelect) {
 
 function populateSelect(select, items, labelKey) {
     const currentValue = select.value;
-    const placeholder = labelKey === 'name_en' ? 'Province' : labelKey === 'name' ? 'Constituency' : 'District';
+    // Determine placeholder based on select ID, not labelKey
+    let placeholder = 'Item';
+    if (select.id.toLowerCase().includes('province')) {
+        placeholder = 'Province';
+    } else if (select.id.toLowerCase().includes('district')) {
+        placeholder = 'District';
+    } else if (select.id.toLowerCase().includes('constituency')) {
+        placeholder = 'Constituency';
+    }
     select.innerHTML = `<option value="">Select ${placeholder}</option>`;
 
     // Sort items - use natural numeric sorting for constituencies
