@@ -8,7 +8,13 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const crypto = require('crypto');
 const db = require('./database');
+
+// Authentication configuration
+const APP_PASSWORD = process.env.APP_PASSWORD || 'nepal2026';
+const SECRET_KEY = process.env.SECRET_KEY || crypto.randomBytes(32).toString('hex');
+const tokens = new Set(); // Store valid tokens in memory
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -17,6 +23,54 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
+
+// ============================================
+// Authentication Routes
+// ============================================
+
+// Login endpoint
+app.post('/api/login', (req, res) => {
+    const { password } = req.body;
+
+    if (password === APP_PASSWORD) {
+        const token = crypto.randomBytes(32).toString('hex');
+        tokens.add(token);
+        res.json({ success: true, token });
+    } else {
+        res.json({ success: false, message: 'Wrong password' });
+    }
+});
+
+// Verify token endpoint
+app.post('/api/verify', (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.slice(7);
+        res.json({ valid: tokens.has(token) });
+    } else {
+        res.json({ valid: false });
+    }
+});
+
+// Logout endpoint
+app.post('/api/logout', (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.slice(7);
+        tokens.delete(token);
+    }
+    res.json({ success: true });
+});
+
+// Serve main app (protected)
+app.get('/app', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+});
+
+// Redirect root to login
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'public', 'login.html'));
+});
 
 // ============================================
 // Province Routes
@@ -350,7 +404,8 @@ app.get('/api/analytics/constituency/:id', async (req, res) => {
 // Serve frontend
 // ============================================
 app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+    // For any unknown routes, redirect to login
+    res.redirect('/');
 });
 
 // ============================================
