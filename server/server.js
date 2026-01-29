@@ -10,10 +10,15 @@ const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
 const multer = require('multer');
-const os = require('os'); // Import os
+const os = require('os');
 const db = require('./database');
 const { analyzeComments } = require('./ai-controller');
 
+// Configure upload
+const upload = multer({
+    dest: os.tmpdir(),
+    limits: { fileSize: 20 * 1024 * 1024 } // 20MB limit
+});
 // Authentication configuration
 const APP_PASSWORD = process.env.APP_PASSWORD || 'nepal2026';
 const SECRET_KEY = process.env.SECRET_KEY || crypto.randomBytes(32).toString('hex');
@@ -23,8 +28,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Configure upload - Use system temp dir for Cloud Run compatibility
-const upload = multer({ 
-    dest: os.tmpdir(), 
+const upload = multer({
+    dest: os.tmpdir(),
     limits: { fileSize: 20 * 1024 * 1024 } // 20MB limit
 });
 
