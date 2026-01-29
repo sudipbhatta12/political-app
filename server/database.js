@@ -230,8 +230,9 @@ module.exports = {
     },
 
     // Candidate queries
-    getCandidatesByConstituency: async (constituencyId) => {
-        const { data, error } = await supabase
+    getCandidatesByConstituency: async (constituencyId, date = null) => {
+        // Build query
+        let query = supabase
             .from('candidates')
             .select(`
                 *,
@@ -244,6 +245,14 @@ module.exports = {
             .eq('constituency_id', constituencyId)
             .order('created_at', { ascending: false });
 
+        // If date is provided, we want to filter the JOINED posts.
+        // Supabase/PostgREST syntax for filtering nested resource:
+        if (date) {
+            query = query.eq('posts.published_date', date);
+        }
+
+        const { data, error } = await query;
+
         if (error) {
             console.error('getCandidatesByConstituency error:', error.message);
             return [];
@@ -251,21 +260,62 @@ module.exports = {
 
         // Flatten to match old format (one row per candidate with post info)
         return (data || []).map(c => {
-            const post = c.posts && c.posts.length > 0 ? c.posts[0] : {};
+            // Because of the inner filter, 'posts' might be empty if no post for that date.
+            // If date is NOT provided, we want the LATEST post.
+            
+            let post = {};
+            if (c.posts && c.posts.length > 0) {
+                if (date) {
+                    // Filter worked, take the first (and only) one
+                    post = c.posts[0];
+                } else {
+                    // No date filter: find the most recent one manually
+                    post = c.posts.sort((a, b) => new Date(b.published_date) - new Date(a.published_date))[0];
+                }
+            }
+
             return {
                 ...c,
-                post_id: post.id || null,
-                post_url: post.post_url || null,
-                published_date: post.published_date || null,
-                positive_percentage: post.positive_percentage || 0,
-                negative_percentage: post.negative_percentage || 0,
-                neutral_percentage: post.neutral_percentage || 0,
-                positive_remarks: post.positive_remarks || '',
-                negative_remarks: post.negative_remarks || '',
-                neutral_remarks: post.neutral_remarks || '',
-                conclusion: post.conclusion || ''
+                post_id: post?.id || null,
+                post_url: post?.post_url || null,
+                published_date: post?.published_date || null,
+                positive_percentage: post?.positive_percentage || 0,
+                negative_percentage: post?.negative_percentage || 0,
+                neutral_percentage: post?.neutral_percentage || 0,
+                positive_remarks: post?.positive_remarks || '',
+                negative_remarks: post?.negative_remarks || '',
+                neutral_remarks: post?.neutral_remarks || '',
+                conclusion: post?.conclusion || ''
             };
         });
+    },
+
+    getConstituencyDates: async (constituencyId) => {
+        // Get all unique published_dates for candidates in this constituency
+        const { data, error } = await supabase
+            .from('candidates')
+            .select(`
+                posts (published_date)
+            `)
+            .eq('constituency_id', constituencyId);
+
+        if (error) {
+            console.error('getConstituencyDates error:', error.message);
+            return [];
+        }
+
+        // Extract and dedup dates
+        const dates = new Set();
+        (data || []).forEach(c => {
+            if (c.posts) {
+                c.posts.forEach(p => {
+                    if (p.published_date) dates.add(p.published_date);
+                });
+            }
+        });
+
+        // Return sorted array (newest first)
+        return Array.from(dates).sort((a, b) => new Date(b) - new Date(a));
     },
 
     getAllCandidatesWithPosts: async () => {

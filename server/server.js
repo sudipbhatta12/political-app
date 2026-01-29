@@ -19,14 +19,19 @@ const upload = multer({
     dest: os.tmpdir(),
     limits: { fileSize: 20 * 1024 * 1024 } // 20MB limit
 });
-
 // Authentication configuration
 const APP_PASSWORD = process.env.APP_PASSWORD || 'nepal2026';
 const SECRET_KEY = process.env.SECRET_KEY || crypto.randomBytes(32).toString('hex');
-// tokens Set removed in favor of db.sessions
+const tokens = new Set(); // Store valid tokens in memory
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Configure upload - Use system temp dir for Cloud Run compatibility
+const upload = multer({
+    dest: os.tmpdir(),
+    limits: { fileSize: 20 * 1024 * 1024 } // 20MB limit
+});
 
 // Middleware
 app.use(cors());
@@ -132,6 +137,16 @@ app.get('/api/constituencies/:districtId', async (req, res) => {
     }
 });
 
+// Get available dates for a constituency
+app.get('/api/constituency/:id/dates', async (req, res) => {
+    try {
+        const dates = await db.getConstituencyDates(parseInt(req.params.id));
+        res.json(dates);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ============================================
 // Candidate Routes
 // ============================================
@@ -139,7 +154,7 @@ app.get('/api/constituencies/:districtId', async (req, res) => {
 // Get candidates by constituency
 app.get('/api/candidates', async (req, res) => {
     try {
-        const { constituency_id, search } = req.query;
+        const { constituency_id, search, date } = req.query;
 
         if (search) {
             const candidates = await db.searchCandidates(search);
@@ -147,7 +162,7 @@ app.get('/api/candidates', async (req, res) => {
         }
 
         if (constituency_id) {
-            const candidates = await db.getCandidatesByConstituency(parseInt(constituency_id));
+            const candidates = await db.getCandidatesByConstituency(parseInt(constituency_id), date);
             // Group posts by candidate
             const candidatesMap = new Map();
             for (const row of candidates) {
@@ -419,7 +434,7 @@ app.get('/api/analytics/constituency/:id', async (req, res) => {
 // AI Analysis Routes
 // ============================================
 
-app.post('/api/ai-analyze', upload.single('file'), analyzeComments);
+app.post('/api/ai-analyze', upload.array('files', 10), analyzeComments);
 
 // ============================================
 // Serve frontend
@@ -433,21 +448,23 @@ app.get('*', (req, res) => {
 // Start server
 // ============================================
 async function startServer() {
-    // Initialize database first
-    await db.initDatabase();
-
+    // 1. Start listening IMMEDIATELY to satisfy Cloud Run health checks
     app.listen(PORT, '0.0.0.0', () => {
         console.log('╔════════════════════════════════════════════════════════════╗');
         console.log('║     POLITICAL SOCIAL MEDIA ASSESSMENT - SERVER STARTED     ║');
         console.log('╠════════════════════════════════════════════════════════════╣');
         console.log(`║  Local:   http://localhost:${PORT}                           ║`);
-        console.log('║  Network: Access from other devices using your IP address  ║');
-        console.log('║           (Run "ipconfig" to find your IPv4 address)       ║');
+        console.log('║  Cloud:   Listening on port ${PORT}                          ║');
         console.log('╚════════════════════════════════════════════════════════════╝');
     });
+
+    // 2. Initialize database in background
+    try {
+        await db.initDatabase();
+    } catch (error) {
+        console.error('❌ Database initialization failed:', error);
+        // We don't exit process so the container stays alive to report errors
+    }
 }
 
-startServer().catch(error => {
-    console.error('Failed to start server:', error);
-    process.exit(1);
-});
+startServer();

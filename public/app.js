@@ -33,6 +33,8 @@ const state = {
     constituencies: [],
     candidates: [],
     selectedConstituencyId: null,
+    availableDates: [], // List of available dates strings
+    currentDateIndex: 0, // 0 = newest
     charts: {},
     currentPostId: null,
     currentSentiment: null
@@ -133,6 +135,13 @@ const elements = {
     fileName: document.getElementById('fileName'),
     aiSubmitBtn: document.getElementById('aiSubmitBtn'),
     aiLoading: document.getElementById('aiLoading'),
+
+    // Timeline
+    timelineSection: document.getElementById('timelineSection'),
+    prevDateBtn: document.getElementById('prevDateBtn'),
+    nextDateBtn: document.getElementById('nextDateBtn'),
+    currentDateDisplay: document.getElementById('currentDateDisplay'),
+    dateStatus: document.getElementById('dateStatus'),
 
     // Winner Section
     winnerSection: document.getElementById('winnerSection'),
@@ -396,21 +405,96 @@ function populateCandidateSelector(candidates) {
 // ============================================
 // Candidates Loading & Display
 // ============================================
-async function loadCandidatesByConstituency(constituencyId) {
+async function loadCandidatesByConstituency(constituencyId, date = null) {
     if (!constituencyId) {
         renderEmptyState();
         return;
     }
 
-    state.selectedConstituencyId = constituencyId;
+    // If new constituency selected (not just date change), reset timeline
+    if (constituencyId !== state.selectedConstituencyId) {
+        state.selectedConstituencyId = constituencyId;
+        await loadConstituencyDates(constituencyId);
+    }
+
+    // Determine date to fetch
+    let dateToFetch = date;
+    if (!date && state.availableDates.length > 0) {
+        dateToFetch = state.availableDates[state.currentDateIndex]; // Default to current selected index (usually 0/newest)
+    }
 
     try {
-        state.candidates = await API.get(`/candidates?constituency_id=${constituencyId}`);
+        const query = dateToFetch 
+            ? `/candidates?constituency_id=${constituencyId}&date=${dateToFetch}`
+            : `/candidates?constituency_id=${constituencyId}`;
+            
+        state.candidates = await API.get(query);
         renderCandidateCards();
         renderSummaryChart();
+        updateTimelineUI();
     } catch (error) {
         showToast('Failed to load candidates', 'error');
         console.error(error);
+    }
+}
+
+async function loadConstituencyDates(constituencyId) {
+    try {
+        const dates = await API.get(`/constituency/${constituencyId}/dates`);
+        state.availableDates = dates;
+        state.currentDateIndex = 0; // Reset to newest
+        
+        if (dates.length > 0) {
+            elements.timelineSection.style.display = 'block';
+        } else {
+            elements.timelineSection.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Failed to load dates:', error);
+        state.availableDates = [];
+        elements.timelineSection.style.display = 'none';
+    }
+}
+
+function updateTimelineUI() {
+    if (state.availableDates.length === 0) {
+        elements.timelineSection.style.display = 'none';
+        return;
+    }
+
+    elements.timelineSection.style.display = 'block';
+    const dateStr = state.availableDates[state.currentDateIndex];
+    const dateObj = new Date(dateStr);
+    
+    // Format: "Wednesday, Jan 29, 2026"
+    elements.currentDateDisplay.textContent = dateObj.toLocaleDateString('en-US', { 
+        weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' 
+    });
+
+    // Status text
+    if (state.currentDateIndex === 0) {
+        elements.dateStatus.textContent = "Latest Data";
+        elements.nextDateBtn.disabled = true;
+    } else {
+        elements.dateStatus.textContent = "Historical Data";
+        elements.nextDateBtn.disabled = false;
+    }
+
+    // Disable Prev if at end
+    if (state.currentDateIndex >= state.availableDates.length - 1) {
+        elements.prevDateBtn.disabled = true;
+    } else {
+        elements.prevDateBtn.disabled = false;
+    }
+}
+
+function changeDate(direction) {
+    const newIndex = state.currentDateIndex + direction; // -1 for next (newer), +1 for prev (older)
+    
+    if (newIndex >= 0 && newIndex < state.availableDates.length) {
+        state.currentDateIndex = newIndex;
+        const newDate = state.availableDates[newIndex];
+        loadCandidatesByConstituency(state.selectedConstituencyId, newDate);
     }
 }
 
@@ -1800,7 +1884,8 @@ function initEventListeners() {
     elements.fileUploadZone.addEventListener('click', () => elements.aiFile.click());
     elements.aiFile.addEventListener('change', (e) => {
         if (e.target.files.length > 0) {
-            elements.fileName.textContent = e.target.files[0].name;
+            const count = e.target.files.length;
+            elements.fileName.textContent = count === 1 ? e.target.files[0].name : `${count} files selected`;
             elements.fileUploadZone.style.borderColor = '#10b981';
             elements.fileUploadZone.style.background = 'rgba(16, 185, 129, 0.1)';
         }
@@ -1826,7 +1911,8 @@ function initEventListeners() {
         
         if (e.dataTransfer.files.length > 0) {
             elements.aiFile.files = e.dataTransfer.files;
-            elements.fileName.textContent = e.dataTransfer.files[0].name;
+            const count = e.dataTransfer.files.length;
+            elements.fileName.textContent = count === 1 ? e.dataTransfer.files[0].name : `${count} files selected`;
         }
     });
     
@@ -1856,6 +1942,10 @@ function initEventListeners() {
 
     // Home button (header brand)
     elements.homeBtn.addEventListener('click', goHome);
+
+    // Timeline Buttons
+    elements.prevDateBtn.addEventListener('click', () => changeDate(1)); // Older (index + 1)
+    elements.nextDateBtn.addEventListener('click', () => changeDate(-1)); // Newer (index - 1)
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
@@ -1997,8 +2087,10 @@ async function openAIModal() {
     elements.aiCandidateSelect.innerHTML = '<option value="">-- Select a Candidate --</option>';
     elements.aiCandidateSelect.disabled = true;
     
-    elements.fileName.textContent = 'Click to browse or drag file here';
+    elements.fileName.textContent = 'Click to browse or drag up to 10 files here';
     elements.fileUploadZone.classList.remove('has-file');
+    elements.fileUploadZone.style.borderColor = 'rgba(255,255,255,0.2)';
+    elements.fileUploadZone.style.background = 'transparent';
     elements.aiLoading.style.display = 'none';
     elements.aiSubmitBtn.disabled = false;
     
@@ -2017,15 +2109,20 @@ async function handleAISubmit(e) {
     e.preventDefault();
     
     const candidateId = elements.aiCandidateSelect.value;
-    const file = elements.aiFile.files[0];
+    const files = elements.aiFile.files;
     
     if (!candidateId) {
         showToast('Please select a candidate', 'error');
         return;
     }
     
-    if (!file) {
-        showToast('Please upload a file', 'error');
+    if (files.length === 0) {
+        showToast('Please upload at least one file', 'error');
+        return;
+    }
+    
+    if (files.length > 10) {
+        showToast('Maximum 10 files allowed', 'error');
         return;
     }
     
@@ -2035,7 +2132,10 @@ async function handleAISubmit(e) {
     
     const formData = new FormData();
     formData.append('candidate_id', candidateId);
-    formData.append('file', file);
+    
+    for (let i = 0; i < files.length; i++) {
+        formData.append('files', files[i]);
+    }
     
     try {
         const response = await fetch('/api/ai-analyze', {
