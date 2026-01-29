@@ -343,13 +343,32 @@ function resetCandidateSelector() {
 function populateCandidateSelector(candidates) {
     elements.candidateSelect.innerHTML = '<option value="">-- Select a Candidate --</option>';
 
-    // Sort candidates by name
-    const sorted = [...candidates].sort((a, b) => a.name.localeCompare(b.name));
+    // Sort candidates: first by party name, then by candidate name within each party
+    const sorted = [...candidates].sort((a, b) => {
+        // First compare by party name
+        const partyCompare = (a.party_name || '').localeCompare(b.party_name || '', 'ne');
+        if (partyCompare !== 0) return partyCompare;
+        // Then by candidate name
+        return (a.name || '').localeCompare(b.name || '', 'ne');
+    });
 
+    // Group by party for better visual separation
+    let currentParty = null;
     sorted.forEach(candidate => {
+        // Add party group label if party changed
+        if (candidate.party_name !== currentParty) {
+            currentParty = candidate.party_name;
+            const groupOption = document.createElement('option');
+            groupOption.disabled = true;
+            groupOption.textContent = `── ${currentParty || 'स्वतन्त्र'} ──`;
+            groupOption.style.fontWeight = 'bold';
+            groupOption.style.color = '#888';
+            elements.candidateSelect.appendChild(groupOption);
+        }
+
         const option = document.createElement('option');
         option.value = candidate.id;
-        option.textContent = `${candidate.name} (${candidate.party_name})`;
+        option.textContent = `  ${candidate.name}`;
         option.dataset.name = candidate.name;
         option.dataset.party = candidate.party_name;
         elements.candidateSelect.appendChild(option);
