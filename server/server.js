@@ -449,21 +449,21 @@ app.get('*', (req, res) => {
 // ============================================
 async function startServer() {
     // 1. Start listening IMMEDIATELY to satisfy Cloud Run health checks
-    app.listen(PORT, '0.0.0.0', () => {
+    const server = app.listen(PORT, '0.0.0.0', () => {
         console.log('╔════════════════════════════════════════════════════════════╗');
         console.log('║     POLITICAL SOCIAL MEDIA ASSESSMENT - SERVER STARTED     ║');
         console.log('╠════════════════════════════════════════════════════════════╣');
         console.log(`║  Local:   http://localhost:${PORT}                           ║`);
-        console.log('║  Cloud:   Listening on port ${PORT}                          ║');
+        console.log(`║  Port:    ${PORT}                                            ║`);
         console.log('╚════════════════════════════════════════════════════════════╝');
     });
 
     // 2. Initialize database in background
     try {
+        console.log('🔄 Connecting to Database...');
         await db.initDatabase();
     } catch (error) {
         console.error('❌ Database initialization failed:', error);
-        // We don't exit process so the container stays alive to report errors
     }
 }
 
