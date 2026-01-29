@@ -27,11 +27,7 @@ const tokens = new Set(); // Store valid tokens in memory
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configure upload - Use system temp dir for Cloud Run compatibility
-const upload = multer({
-    dest: os.tmpdir(),
-    limits: { fileSize: 20 * 1024 * 1024 } // 20MB limit
-});
+
 
 // Middleware
 app.use(cors());
