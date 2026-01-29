@@ -14,7 +14,7 @@ const db = require('./database');
 const { analyzeComments } = require('./ai-controller');
 
 // Configure upload
-const upload = multer({ 
+const upload = multer({
     dest: path.join(__dirname, '..', '.gemini', 'tmp'),
     limits: { fileSize: 20 * 1024 * 1024 } // 20MB limit
 });
@@ -22,7 +22,7 @@ const upload = multer({
 // Authentication configuration
 const APP_PASSWORD = process.env.APP_PASSWORD || 'nepal2026';
 const SECRET_KEY = process.env.SECRET_KEY || crypto.randomBytes(32).toString('hex');
-const tokens = new Set(); // Store valid tokens in memory
+// tokens Set removed in favor of db.sessions
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -37,35 +37,41 @@ app.use(express.static(path.join(__dirname, '..', 'public'), { index: false }));
 // ============================================
 
 // Login endpoint
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
     const { password } = req.body;
 
     if (password === APP_PASSWORD) {
         const token = crypto.randomBytes(32).toString('hex');
-        tokens.add(token);
-        res.json({ success: true, token });
+        const success = await db.createSession(token);
+
+        if (success) {
+            res.json({ success: true, token });
+        } else {
+            res.status(500).json({ success: false, message: 'Database error' });
+        }
     } else {
         res.json({ success: false, message: 'Wrong password' });
     }
 });
 
 // Verify token endpoint
-app.post('/api/verify', (req, res) => {
+app.post('/api/verify', async (req, res) => {
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
         const token = authHeader.slice(7);
-        res.json({ valid: tokens.has(token) });
+        const isValid = await db.verifySession(token);
+        res.json({ valid: isValid });
     } else {
         res.json({ valid: false });
     }
 });
 
 // Logout endpoint
-app.post('/api/logout', (req, res) => {
+app.post('/api/logout', async (req, res) => {
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
         const token = authHeader.slice(7);
-        tokens.delete(token);
+        await db.deleteSession(token);
     }
     res.json({ success: true });
 });

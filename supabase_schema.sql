@@ -88,3 +88,21 @@ CREATE POLICY "Allow public delete" ON posts FOR DELETE USING (true);
 CREATE POLICY "Allow public read" ON comments FOR SELECT USING (true);
 CREATE POLICY "Allow public insert" ON comments FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow public delete" ON comments FOR DELETE USING (true);
+
+-- Sessions table for persistent authentication
+CREATE TABLE IF NOT EXISTS sessions (
+    token TEXT PRIMARY KEY,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    expires_at TIMESTAMPTZ DEFAULT (NOW() + interval '24 hours')
+);
+
+-- Index for fast token lookups
+CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
+
+-- Enable Row Level Security
+ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
+
+-- Allow public access (API handles verification)
+CREATE POLICY "Allow public insert" ON sessions FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public read" ON sessions FOR SELECT USING (true);
+CREATE POLICY "Allow public delete" ON sessions FOR DELETE USING (true);

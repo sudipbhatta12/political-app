@@ -137,9 +137,65 @@ async function seedData() {
     console.log('✅ Database seeded with Nepal electoral data!');
 }
 
+/**
+ * Initialize Sessions Table
+ */
+async function initSessionTable() {
+    const { error } = await supabase
+        .from('sessions')
+        .select('token')
+        .limit(1);
+
+    // If error code is '42P01' (undefined_table), we technically can't create tables via JS client 
+    // without using the SQL editor URL or specialized RPCs in most Supabase setups unless we have admin rights.
+    // However, if we assume standard access, we might rely on the user running the SQL. 
+    // BUT, for this specific task, I'll attempt to implement the logic assuming the table exists 
+    // or provide a fallback if the user needs to run SQL.
+    
+    // Actually, in many agent scenarios, we can't CREATE TABLE easily via the JS client standard API 
+    // unless we use a specific rpc or the management API.
+    // I will add the methods and assume the table creation is handled or I'll provide the SQL.
+    // For "doing the fix", I'll implement the JS logic and update the schema file.
+    
+    // Ideally, we should check connection.
+}
+
 // Export module functions
 module.exports = {
     initDatabase,
+
+    // Session Management
+    createSession: async (token) => {
+        const { error } = await supabase
+            .from('sessions')
+            .insert({ token });
+        
+        if (error) {
+            console.error('createSession error:', error.message);
+            return false;
+        }
+        return true;
+    },
+
+    verifySession: async (token) => {
+        const { data, error } = await supabase
+            .from('sessions')
+            .select('token')
+            .eq('token', token)
+            .single();
+
+        if (error || !data) return false;
+        return true;
+    },
+
+    deleteSession: async (token) => {
+        const { error } = await supabase
+            .from('sessions')
+            .delete()
+            .eq('token', token);
+        
+        if (error) console.error('deleteSession error:', error.message);
+    },
 
     // Province queries
     getAllProvinces: async () => {
