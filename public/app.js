@@ -118,6 +118,22 @@ const elements = {
     libraryDateFilter: document.getElementById('libraryDateFilter'),
     clearLibraryFilter: document.getElementById('clearLibraryFilter'),
 
+    // AI Modal
+    aiBtn: document.getElementById('aiBtn'),
+    aiModal: document.getElementById('aiModal'),
+    aiModalClose: document.getElementById('aiModalClose'),
+    aiModalCancel: document.getElementById('aiModalCancel'),
+    aiForm: document.getElementById('aiForm'),
+    aiProvince: document.getElementById('aiProvince'),
+    aiDistrict: document.getElementById('aiDistrict'),
+    aiConstituency: document.getElementById('aiConstituency'),
+    aiCandidateSelect: document.getElementById('aiCandidateSelect'),
+    aiFile: document.getElementById('aiFile'),
+    fileUploadZone: document.getElementById('fileUploadZone'),
+    fileName: document.getElementById('fileName'),
+    aiSubmitBtn: document.getElementById('aiSubmitBtn'),
+    aiLoading: document.getElementById('aiLoading'),
+
     // Winner Section
     winnerSection: document.getElementById('winnerSection'),
     winnerName: document.getElementById('winnerName'),
@@ -522,7 +538,13 @@ function createCandidateCard(candidate, index, isSearchResult) {
                 <div class="party-card__meta-item">
                     <span>🔗</span>
                     <span class="post-link" data-url="${escapeHtml(post.post_url || '')}">
-                        ${post.post_url ? new URL(post.post_url).hostname : 'No URL'}
+                        ${(() => {
+                            try {
+                                return new URL(post.post_url).hostname;
+                            } catch (e) {
+                                return escapeHtml(post.post_url || 'Link');
+                            }
+                        })()}
                     </span>
                 </div>
                 <div class="party-card__meta-item">
@@ -1041,6 +1063,14 @@ function openPostPreview(postUrl) {
         return;
     }
 
+    // Check if it's a valid URL (e.g. not an AI Analysis label)
+    try {
+        new URL(postUrl);
+    } catch (e) {
+        showToast('This is an uploaded file analysis, not a web link.', 'info');
+        return;
+    }
+
     // Open in a popup window - this works for all Facebook posts
     const width = 800;
     const height = 700;
@@ -1241,16 +1271,10 @@ function renderLibraryTable() {
     // Filter data
     const filteredData = libraryData.filter(c => {
         if (!dateFilter) return true;
-
-        // Handle potentially different date formats (ISO string vs YYYY-MM-DD)
-        // safely extract YYYY-MM-DD part
         let recordDate = '';
         if (c.post.published_date) {
-            // If it's already a string like "2026-01-28", substring is safe
-            // If it's a full ISO string "2026-01-28T10:00:00.000Z", substring is also safe
             recordDate = c.post.published_date.toString().substring(0, 10);
         }
-
         return recordDate === dateFilter;
     });
 
@@ -1280,6 +1304,9 @@ function renderLibraryTable() {
                     <button class="btn btn--icon btn--secondary export-excel" title="Export Excel" data-id="${candidate.id}">
                         <i data-lucide="file-spreadsheet"></i>
                     </button>
+                    <button class="btn btn--icon btn--danger delete-library-item" title="Delete" data-id="${candidate.id}">
+                        <i data-lucide="trash-2"></i>
+                    </button>
                 </td>
             </tr>
         `;
@@ -1298,27 +1325,14 @@ function renderLibraryTable() {
             const candidateId = parseInt(row.dataset.candidateId);
             const candidate = libraryData.find(c => c.id === candidateId);
             if (candidate) {
-                // View candidate on dashboard
                 closeLibrary();
-
-                // Set state to this single candidate for viewing
-                // We need to match the structure for renderCandidateCards
                 state.candidates = [{
                     ...candidate,
-                    // Ensure the 'post' object is structured correctly for renderCandidateCards loop
-                    // Library data structure is flat candidate + single post object
-                    // renderCandidateCards iterates candidates and their posts. 
-                    // Let's create a temporary structure.
                     posts: [candidate.post]
                 }];
-
-                // Clear filters visual only? Or actually load them?
-                // For simplicity, just render the card.
-                renderCandidateCards(true); // true = clear existing
-                state.selectedConstituencyId = null; // Clear const selection to indicate manual/special view
+                renderCandidateCards(true); 
+                state.selectedConstituencyId = null;
                 elements.summarySection.style.display = 'none';
-
-                // Optional: Scroll to it
                 elements.partyGrid.scrollIntoView({ behavior: 'smooth' });
             }
         });
@@ -1335,6 +1349,47 @@ function renderLibraryTable() {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
             exportToExcel(parseInt(btn.dataset.id));
+        });
+    });
+
+    // 3. Delete Action
+    elements.libraryTableBody.querySelectorAll('.delete-library-item').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const candidateId = parseInt(btn.dataset.id);
+            const candidate = libraryData.find(c => c.id === candidateId);
+            
+            if (confirm(`Are you sure you want to delete the assessment for "${candidate.name}"? This action cannot be undone.`)) {
+                try {
+                    // We delete the POST, not the candidate (unless you want to delete the candidate entirely?)
+                    // The requirement says "delete data from library". 
+                    // Usually this means deleting the analysis (post).
+                    // If we delete the post, the candidate remains but won't show in library (filter(c => c.post)).
+                    
+                    if (candidate.post && candidate.post.id) {
+                        await API.delete(`/posts/${candidate.post.id}`);
+                        showToast('Assessment deleted', 'success');
+                        
+                        // Refresh library
+                        openLibrary();
+                        
+                        // If this candidate was currently displayed on dashboard, clear it
+                        const currentCard = document.querySelector(`.party-card[data-candidate-id="${candidateId}"]`);
+                        if (currentCard) {
+                             // If we are in "View" mode (single card), go home
+                             if (!state.selectedConstituencyId) {
+                                 goHome();
+                             } else {
+                                 // Reload constituency
+                                 loadCandidatesByConstituency(state.selectedConstituencyId);
+                             }
+                        }
+                    }
+                } catch (error) {
+                    showToast('Failed to delete assessment', 'error');
+                    console.error(error);
+                }
+            }
         });
     });
 }
@@ -1708,6 +1763,75 @@ function initEventListeners() {
     elements.exportAllExcel.addEventListener('click', () => exportToExcel());
     elements.exportAllPdf.addEventListener('click', () => exportToPDF());
 
+    // AI Modal Events
+    elements.aiBtn.addEventListener('click', openAIModal);
+    elements.aiModalClose.addEventListener('click', closeAIModal);
+    elements.aiModalCancel.addEventListener('click', closeAIModal);
+    elements.aiModal.addEventListener('click', (e) => {
+        if (e.target === elements.aiModal) closeAIModal();
+    });
+    
+    // AI Form Location Selectors
+    elements.aiProvince.addEventListener('change', (e) => {
+        loadDistricts(e.target.value, null, elements.aiDistrict, elements.aiConstituency);
+        resetCandidateSelectorInAI();
+    });
+
+    elements.aiDistrict.addEventListener('change', (e) => {
+        loadConstituencies(e.target.value, elements.aiConstituency);
+        resetCandidateSelectorInAI();
+    });
+
+    elements.aiConstituency.addEventListener('change', async (e) => {
+        const constituencyId = e.target.value;
+        if (!constituencyId) {
+            resetCandidateSelectorInAI();
+            return;
+        }
+        try {
+            const candidates = await API.get(`/candidates?constituency_id=${constituencyId}`);
+            populateCandidateSelectorInAI(candidates);
+        } catch (error) {
+            console.error(error);
+        }
+    });
+    
+    // File Upload Zone
+    elements.fileUploadZone.addEventListener('click', () => elements.aiFile.click());
+    elements.aiFile.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            elements.fileName.textContent = e.target.files[0].name;
+            elements.fileUploadZone.style.borderColor = '#10b981';
+            elements.fileUploadZone.style.background = 'rgba(16, 185, 129, 0.1)';
+        }
+    });
+    
+    // Drag & Drop
+    elements.fileUploadZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        elements.fileUploadZone.style.borderColor = '#8b5cf6';
+        elements.fileUploadZone.style.background = 'rgba(139, 92, 246, 0.1)';
+    });
+    
+    elements.fileUploadZone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        elements.fileUploadZone.style.borderColor = 'rgba(255,255,255,0.2)';
+        elements.fileUploadZone.style.background = 'transparent';
+    });
+    
+    elements.fileUploadZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        elements.fileUploadZone.style.borderColor = '#10b981';
+        elements.fileUploadZone.style.background = 'rgba(16, 185, 129, 0.1)';
+        
+        if (e.dataTransfer.files.length > 0) {
+            elements.aiFile.files = e.dataTransfer.files;
+            elements.fileName.textContent = e.dataTransfer.files[0].name;
+        }
+    });
+    
+    elements.aiForm.addEventListener('submit', handleAISubmit);
+
     // Post Preview modal
     elements.postPreviewModalClose.addEventListener('click', closePostPreview);
     elements.postPreviewModal.addEventListener('click', (e) => {
@@ -1824,6 +1948,138 @@ async function openRecentConstituency(constituencyId, provinceId, districtId) {
     } catch (error) {
         console.error('Failed to open recent constituency:', error);
         showToast('Failed to load constituency data', 'error');
+    }
+}
+
+// ============================================
+// AI Analysis Modal
+// ============================================
+
+function resetCandidateSelectorInAI() {
+    elements.aiCandidateSelect.innerHTML = '<option value="">-- Select a Candidate --</option>';
+    elements.aiCandidateSelect.disabled = true;
+}
+
+function populateCandidateSelectorInAI(candidates) {
+    elements.aiCandidateSelect.innerHTML = '<option value="">-- Select a Candidate --</option>';
+
+    const sorted = [...candidates].sort((a, b) => {
+        const partyCompare = (a.party_name || '').localeCompare(b.party_name || '', 'ne');
+        if (partyCompare !== 0) return partyCompare;
+        return (a.name || '').localeCompare(b.name || '', 'ne');
+    });
+
+    let currentParty = null;
+    sorted.forEach(candidate => {
+        if (candidate.party_name !== currentParty) {
+            currentParty = candidate.party_name;
+            const groupOption = document.createElement('option');
+            groupOption.disabled = true;
+            groupOption.textContent = `── ${currentParty || 'स्वतन्त्र'} ──`;
+            elements.aiCandidateSelect.appendChild(groupOption);
+        }
+
+        const option = document.createElement('option');
+        option.value = candidate.id;
+        option.textContent = `  ${candidate.name}`;
+        elements.aiCandidateSelect.appendChild(option);
+    });
+
+    elements.aiCandidateSelect.disabled = false;
+}
+
+async function openAIModal() {
+    elements.aiForm.reset();
+    elements.aiProvince.value = '';
+    resetSelect(elements.aiDistrict, 'Select District');
+    resetSelect(elements.aiConstituency, 'Select Constituency');
+    
+    elements.aiCandidateSelect.innerHTML = '<option value="">-- Select a Candidate --</option>';
+    elements.aiCandidateSelect.disabled = true;
+    
+    elements.fileName.textContent = 'Click to browse or drag file here';
+    elements.fileUploadZone.classList.remove('has-file');
+    elements.aiLoading.style.display = 'none';
+    elements.aiSubmitBtn.disabled = false;
+    
+    // Load provinces
+    await populateSelect(elements.aiProvince, state.provinces, 'name_en');
+    
+    elements.aiModal.classList.add('active');
+}
+
+function closeAIModal() {
+    if (elements.aiLoading.style.display === 'block') return; // Prevent closing while loading
+    elements.aiModal.classList.remove('active');
+}
+
+async function handleAISubmit(e) {
+    e.preventDefault();
+    
+    const candidateId = elements.aiCandidateSelect.value;
+    const file = elements.aiFile.files[0];
+    
+    if (!candidateId) {
+        showToast('Please select a candidate', 'error');
+        return;
+    }
+    
+    if (!file) {
+        showToast('Please upload a file', 'error');
+        return;
+    }
+    
+    // Show loading state
+    elements.aiLoading.style.display = 'block';
+    elements.aiSubmitBtn.disabled = true;
+    
+    const formData = new FormData();
+    formData.append('candidate_id', candidateId);
+    formData.append('file', file);
+    
+    try {
+        const response = await fetch('/api/ai-analyze', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Analysis failed');
+        }
+        
+        showToast('Analysis complete! Result saved.', 'success');
+        
+        // Reset loading state BEFORE closing to bypass the guard clause in closeAIModal
+        elements.aiLoading.style.display = 'none';
+        elements.aiSubmitBtn.disabled = false;
+        
+        closeAIModal();
+        
+        // Auto-navigate to the result
+        const provinceId = elements.aiProvince.value;
+        const districtId = elements.aiDistrict.value;
+        const constituencyId = elements.aiConstituency.value;
+        
+        // Update main filters
+        elements.provinceSelect.value = provinceId;
+        await loadDistricts(provinceId, null, elements.districtSelect, elements.constituencySelect);
+        elements.districtSelect.value = districtId;
+        elements.districtSelect.disabled = false;
+        await loadConstituencies(districtId, elements.constituencySelect);
+        elements.constituencySelect.value = constituencyId;
+        elements.constituencySelect.disabled = false;
+        
+        // Load candidates
+        state.selectedConstituencyId = constituencyId;
+        await loadCandidatesByConstituency(constituencyId);
+        
+    } catch (error) {
+        console.error(error);
+        showToast(error.message, 'error');
+        elements.aiLoading.style.display = 'none';
+        elements.aiSubmitBtn.disabled = false;
     }
 }
 

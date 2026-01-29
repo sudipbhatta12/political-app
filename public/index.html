@@ -50,6 +50,10 @@
                 <i data-lucide="library" class="btn__icon"></i>
                 <span>Library</span>
             </button>
+            <button class="btn btn--secondary" id="aiBtn" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border: none; color: white;">
+                <i data-lucide="sparkles" class="btn__icon"></i>
+                <span>AI Analysis</span>
+            </button>
             <button class="btn btn--primary" id="addCandidateBtn">
                 <i data-lucide="plus" class="btn__icon"></i>
                 <span>Add Post Data</span>
@@ -396,6 +400,85 @@
                     <p>No saved assessments yet</p>
                     <p class="text-muted">Add post data to see it here</p>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Analysis Modal -->
+    <div class="modal-overlay" id="aiModal">
+        <div class="modal">
+            <div class="modal__header">
+                <h3 class="modal__title">
+                    <i data-lucide="sparkles" style="color: #8b5cf6;"></i>
+                    AI Sentiment Analyst
+                </h3>
+                <button class="modal__close" id="aiModalClose">&times;</button>
+            </div>
+            <div class="modal__body">
+                <form id="aiForm" class="form-grid">
+                    <div class="ai-intro" style="margin-bottom: 20px; text-align: center; color: #a0a0b0; font-size: 0.9rem;">
+                        <p>Upload comments (PDF, Excel, CSV) and Gemini AI will automatically analyze sentiment percentages and generate remarks.</p>
+                    </div>
+
+                    <!-- Location Selection -->
+                    <div class="form-row">
+                        <label for="aiProvince">Province *</label>
+                        <select id="aiProvince" required>
+                            <option value="">Select Province</option>
+                        </select>
+                    </div>
+
+                    <div class="form-grid form-grid--2col">
+                        <div class="form-row">
+                            <label for="aiDistrict">District *</label>
+                            <select id="aiDistrict" required disabled>
+                                <option value="">Select District</option>
+                            </select>
+                        </div>
+                        <div class="form-row">
+                            <label for="aiConstituency">Constituency *</label>
+                            <select id="aiConstituency" required disabled>
+                                <option value="">Select Constituency</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <hr style="border-color: var(--border-glass);">
+
+                    <!-- Candidate Selector -->
+                    <div class="form-row">
+                        <label for="aiCandidateSelect">Select Candidate *</label>
+                        <select id="aiCandidateSelect" required disabled>
+                            <option value="">-- Select a Candidate --</option>
+                        </select>
+                    </div>
+
+                    <!-- File Upload -->
+                     <div class="form-row" style="margin-top: 20px;">
+                        <label>Upload Comments File (PDF, Excel, CSV)</label>
+                        <div class="file-upload-zone" id="fileUploadZone" style="border: 2px dashed rgba(255,255,255,0.2); padding: 30px; border-radius: 12px; text-align: center; cursor: pointer; transition: all 0.3s ease;">
+                            <input type="file" id="aiFile" accept=".pdf,.csv,.xlsx,.xls" style="display: none;">
+                            <i data-lucide="upload-cloud" style="width: 48px; height: 48px; color: #8b5cf6; margin-bottom: 10px;"></i>
+                            <p id="fileName" style="margin-bottom: 5px;">Click to browse or drag file here</p>
+                            <p class="text-muted" style="font-size: 0.8rem;">Max size: 20MB</p>
+                        </div>
+                    </div>
+
+                    <!-- Loading State -->
+                    <div id="aiLoading" style="display: none; text-align: center; margin-top: 20px;">
+                        <div class="spinner" style="margin: 0 auto 15px;"></div>
+                        <p style="color: #8b5cf6; font-weight: 500;">AI is analyzing comments...</p>
+                        <p class="text-muted" style="font-size: 0.8rem;">This may take a few seconds</p>
+                    </div>
+
+                </form>
+            </div>
+            <div class="modal__footer">
+                <button type="button" class="btn btn--secondary" id="aiModalCancel">Cancel</button>
+                <button type="submit" form="aiForm" class="btn btn--primary" id="aiSubmitBtn" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border: none;">
+                    <i data-lucide="sparkles" style="width: 16px; height: 16px; margin-right: 8px;"></i>
+                    Run Analysis
+                </button>
             </div>
         </div>
     </div>

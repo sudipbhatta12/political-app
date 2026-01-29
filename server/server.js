@@ -9,7 +9,15 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
+const multer = require('multer');
 const db = require('./database');
+const { analyzeComments } = require('./ai-controller');
+
+// Configure upload
+const upload = multer({ 
+    dest: path.join(__dirname, '..', '.gemini', 'tmp'),
+    limits: { fileSize: 20 * 1024 * 1024 } // 20MB limit
+});
 
 // Authentication configuration
 const APP_PASSWORD = process.env.APP_PASSWORD || 'nepal2026';
@@ -399,6 +407,12 @@ app.get('/api/analytics/constituency/:id', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+// ============================================
+// AI Analysis Routes
+// ============================================
+
+app.post('/api/ai-analyze', upload.single('file'), analyzeComments);
 
 // ============================================
 // Serve frontend
