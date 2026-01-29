@@ -10,22 +10,23 @@ const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
 const multer = require('multer');
+const os = require('os'); // Import os
 const db = require('./database');
 const { analyzeComments } = require('./ai-controller');
-
-// Configure upload
-const upload = multer({
-    dest: path.join(__dirname, '..', '.gemini', 'tmp'),
-    limits: { fileSize: 20 * 1024 * 1024 } // 20MB limit
-});
 
 // Authentication configuration
 const APP_PASSWORD = process.env.APP_PASSWORD || 'nepal2026';
 const SECRET_KEY = process.env.SECRET_KEY || crypto.randomBytes(32).toString('hex');
-// tokens Set removed in favor of db.sessions
+const tokens = new Set(); // Store valid tokens in memory
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Configure upload - Use system temp dir for Cloud Run compatibility
+const upload = multer({ 
+    dest: os.tmpdir(), 
+    limits: { fileSize: 20 * 1024 * 1024 } // 20MB limit
+});
 
 // Middleware
 app.use(cors());
@@ -442,21 +443,23 @@ app.get('*', (req, res) => {
 // Start server
 // ============================================
 async function startServer() {
-    // Initialize database first
-    await db.initDatabase();
-
+    // 1. Start listening IMMEDIATELY to satisfy Cloud Run health checks
     app.listen(PORT, '0.0.0.0', () => {
         console.log('╔════════════════════════════════════════════════════════════╗');
         console.log('║     POLITICAL SOCIAL MEDIA ASSESSMENT - SERVER STARTED     ║');
         console.log('╠════════════════════════════════════════════════════════════╣');
         console.log(`║  Local:   http://localhost:${PORT}                           ║`);
-        console.log('║  Network: Access from other devices using your IP address  ║');
-        console.log('║           (Run "ipconfig" to find your IPv4 address)       ║');
+        console.log('║  Cloud:   Listening on port ${PORT}                          ║');
         console.log('╚════════════════════════════════════════════════════════════╝');
     });
+
+    // 2. Initialize database in background
+    try {
+        await db.initDatabase();
+    } catch (error) {
+        console.error('❌ Database initialization failed:', error);
+        // We don't exit process so the container stays alive to report errors
+    }
 }
 
-startServer().catch(error => {
-    console.error('Failed to start server:', error);
-    process.exit(1);
-});
+startServer();
