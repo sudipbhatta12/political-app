@@ -38,6 +38,10 @@ app.use(express.static(path.join(__dirname, '..', 'public'), { index: false }));
 // Authentication Routes
 // ============================================
 
+// Health check for Cloud Run
+app.get('/health', (req, res) => res.status(200).send('OK'));
+app.get('/_ah/health', (req, res) => res.status(200).send('OK')); // App Engine standard
+
 // Login endpoint
 app.post('/api/login', async (req, res) => {
     const { password } = req.body;
