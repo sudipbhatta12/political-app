@@ -131,6 +131,16 @@ app.get('/api/constituencies/:districtId', async (req, res) => {
     }
 });
 
+// Get available dates for a constituency
+app.get('/api/constituency/:id/dates', async (req, res) => {
+    try {
+        const dates = await db.getConstituencyDates(parseInt(req.params.id));
+        res.json(dates);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ============================================
 // Candidate Routes
 // ============================================
@@ -138,7 +148,7 @@ app.get('/api/constituencies/:districtId', async (req, res) => {
 // Get candidates by constituency
 app.get('/api/candidates', async (req, res) => {
     try {
-        const { constituency_id, search } = req.query;
+        const { constituency_id, search, date } = req.query;
 
         if (search) {
             const candidates = await db.searchCandidates(search);
@@ -146,7 +156,7 @@ app.get('/api/candidates', async (req, res) => {
         }
 
         if (constituency_id) {
-            const candidates = await db.getCandidatesByConstituency(parseInt(constituency_id));
+            const candidates = await db.getCandidatesByConstituency(parseInt(constituency_id), date);
             // Group posts by candidate
             const candidatesMap = new Map();
             for (const row of candidates) {
@@ -418,7 +428,7 @@ app.get('/api/analytics/constituency/:id', async (req, res) => {
 // AI Analysis Routes
 // ============================================
 
-app.post('/api/ai-analyze', upload.single('file'), analyzeComments);
+app.post('/api/ai-analyze', upload.array('files', 10), analyzeComments);
 
 // ============================================
 // Serve frontend

@@ -95,6 +95,22 @@
             </div>
         </section>
 
+        <!-- Timeline Navigation -->
+        <section class="timeline" id="timelineSection" style="display: none; margin-bottom: 24px;">
+            <div class="timeline-bar" style="display: flex; align-items: center; justify-content: center; gap: 16px; background: rgba(255,255,255,0.05); padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);">
+                <button class="btn btn--icon btn--secondary" id="prevDateBtn" title="Previous Date">
+                    <i data-lucide="chevron-left"></i>
+                </button>
+                <div class="timeline-date" style="text-align: center;">
+                    <span id="currentDateDisplay" style="font-size: 1.1rem; font-weight: 600; color: white; display: block;">Today</span>
+                    <span id="dateStatus" style="font-size: 0.8rem; color: #a0a0b0;">Latest Data</span>
+                </div>
+                <button class="btn btn--icon btn--secondary" id="nextDateBtn" title="Next Date">
+                    <i data-lucide="chevron-right"></i>
+                </button>
+            </div>
+        </section>
+
         <!-- Party Cards Grid -->
         <section class="party-grid" id="partyGrid">
             <!-- Cards will be dynamically inserted here -->
@@ -455,11 +471,11 @@
 
                     <!-- File Upload -->
                      <div class="form-row" style="margin-top: 20px;">
-                        <label>Upload Comments File (PDF, Excel, CSV)</label>
+                        <label>Upload Comments Files (PDF, Excel, CSV)</label>
                         <div class="file-upload-zone" id="fileUploadZone" style="border: 2px dashed rgba(255,255,255,0.2); padding: 30px; border-radius: 12px; text-align: center; cursor: pointer; transition: all 0.3s ease;">
-                            <input type="file" id="aiFile" accept=".pdf,.csv,.xlsx,.xls" style="display: none;">
+                            <input type="file" id="aiFile" accept=".pdf,.csv,.xlsx,.xls" multiple style="display: none;">
                             <i data-lucide="upload-cloud" style="width: 48px; height: 48px; color: #8b5cf6; margin-bottom: 10px;"></i>
-                            <p id="fileName" style="margin-bottom: 5px;">Click to browse or drag file here</p>
+                            <p id="fileName" style="margin-bottom: 5px;">Click to browse or drag up to 10 files here</p>
                             <p class="text-muted" style="font-size: 0.8rem;">Max size: 20MB</p>
                         </div>
                     </div>
