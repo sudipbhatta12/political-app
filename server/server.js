@@ -10,12 +10,13 @@ const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
 const multer = require('multer');
+const os = require('os');
 const db = require('./database');
 const { analyzeComments } = require('./ai-controller');
 
 // Configure upload
 const upload = multer({
-    dest: path.join(__dirname, '..', '.gemini', 'tmp'),
+    dest: os.tmpdir(),
     limits: { fileSize: 20 * 1024 * 1024 } // 20MB limit
 });
 
