@@ -188,7 +188,8 @@ app.get('/api/candidates', async (req, res) => {
                         positive_remarks: row.positive_remarks,
                         negative_remarks: row.negative_remarks,
                         neutral_remarks: row.neutral_remarks,
-                        conclusion: row.conclusion
+                        conclusion: row.conclusion,
+                        comment_count: row.comment_count
                     });
                 }
             }

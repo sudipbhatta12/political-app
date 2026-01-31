@@ -6,11 +6,15 @@ const { parse } = require('csv-parse/sync');
 const db = require('./database');
 
 // Initialize Gemini
-// Fallback to the provided key if env var is missing
-const API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyAPPyEtnTp1Q-E8Ii-HN-voWEARNeQjOGc';
-const genAI = new GoogleGenerativeAI(API_KEY);
+// API key must be set in .env file
+const API_KEY = process.env.GEMINI_API_KEY;
+if (!API_KEY) {
+    console.warn('⚠️ WARNING: GEMINI_API_KEY not set in .env file. AI analysis will not work.');
+}
+const genAI = API_KEY ? new GoogleGenerativeAI(API_KEY) : null;
 
 // Helper: Extract text from different file types
+// Returns { text: string, count: number } for tracking comment counts
 async function extractTextFromFile(file) {
     const buffer = fs.readFileSync(file.path);
     const mimeType = file.mimetype;
@@ -21,16 +25,16 @@ async function extractTextFromFile(file) {
             const data = await pdf(buffer);
             // Split by newlines and filter empty
             comments = data.text.split('\n').filter(line => line.trim().length > 10);
-        } 
-        else if (mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || 
-                 mimeType === 'application/vnd.ms-excel') {
+        }
+        else if (mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+            mimeType === 'application/vnd.ms-excel') {
             const workbook = XLSX.read(buffer, { type: 'buffer' });
             const sheetName = workbook.SheetNames[0];
             const sheet = workbook.Sheets[sheetName];
             const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
             // Flatten and filter
             comments = jsonData.flat().map(c => String(c)).filter(c => c.trim().length > 5);
-        } 
+        }
         else if (mimeType === 'text/csv' || mimeType === 'application/csv') {
             const records = parse(buffer, { columns: false, skip_empty_lines: true });
             comments = records.flat().map(c => String(c)).filter(c => c.trim().length > 5);
@@ -39,8 +43,16 @@ async function extractTextFromFile(file) {
             throw new Error('Unsupported file type');
         }
 
+        // Store the total count before limiting
+        const totalCount = comments.length;
+
         // Limit to first 2000 comments to fit in context window if extremely large
-        return comments.slice(0, 2000).join('\n');
+        const limitedComments = comments.slice(0, 2000);
+
+        return {
+            text: limitedComments.join('\n'),
+            count: totalCount
+        };
     } catch (error) {
         console.error('Text extraction error:', error);
         throw new Error('Failed to read file content');
@@ -60,14 +72,21 @@ async function analyzeComments(req, res) {
 
         // 1. Extract Text from ALL files
         console.log(`📂 Processing ${req.files.length} file(s)...`);
-        
+
         let allComments = [];
+        let totalCommentCount = 0;
+
         for (const file of req.files) {
             console.log(`   - Reading: ${file.originalname}`);
-            const text = await extractTextFromFile(file);
-            if (text) allComments.push(text);
+            const result = await extractTextFromFile(file);
+            if (result.text) {
+                allComments.push(result.text);
+                totalCommentCount += result.count;
+            }
         }
-        
+
+        console.log(`📊 Total comments extracted: ${totalCommentCount}`);
+
         const commentsText = allComments.join('\n');
 
         if (commentsText.length < 50) {
@@ -105,14 +124,14 @@ async function analyzeComments(req, res) {
         const result = await model.generateContent(prompt);
         const response = await result.response;
         const text = response.text();
-        
+
         // Clean markdown code blocks if present
         let jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        
+
         // Robust JSON extraction: Find the first '{' and last '}'
         const firstOpen = jsonStr.indexOf('{');
         const lastClose = jsonStr.lastIndexOf('}');
-        
+
         if (firstOpen !== -1 && lastClose !== -1) {
             jsonStr = jsonStr.substring(firstOpen, lastClose + 1);
         }
@@ -133,17 +152,21 @@ async function analyzeComments(req, res) {
         const today = new Date().toISOString().split('T')[0];
         const existingPosts = await db.getPostsByCandidate(parseInt(candidate_id));
         const postForToday = existingPosts.find(p => p.published_date === today);
-        
+
         let postId = 0;
         const fileNames = req.files.map(f => f.originalname).join(', ');
-        const postUrl = `AI Analysis - ${req.files.length} file(s)`;
-        
+
+        // Use the source URL if provided, otherwise use a descriptive text
+        const sourceUrl = req.body.source_url;
+        const postUrl = sourceUrl || `AI Analysis - ${req.files.length} file(s)`;
+
         if (postForToday) {
             // Update existing post for TODAY
             postId = postForToday.id;
             await db.updatePost(postId, {
                 post_url: postUrl,
                 published_date: today,
+                comment_count: totalCommentCount,
                 ...analysis
             });
             console.log(`🔄 Updated existing post ID: ${postId} for date ${today}`);
@@ -153,6 +176,7 @@ async function analyzeComments(req, res) {
                 candidate_id: parseInt(candidate_id),
                 post_url: postUrl,
                 published_date: today,
+                comment_count: totalCommentCount,
                 ...analysis
             });
             console.log(`✨ Created new post ID: ${postId} for date ${today}`);
@@ -165,10 +189,11 @@ async function analyzeComments(req, res) {
             } catch (e) { console.error('Cleanup error:', e); }
         }
 
-        res.json({ 
-            success: true, 
+        res.json({
+            success: true,
             message: 'Analysis completed and saved successfully',
-            data: analysis 
+            data: analysis,
+            commentCount: totalCommentCount
         });
 
     } catch (error) {
@@ -181,7 +206,7 @@ async function analyzeComments(req, res) {
                 } catch (e) { }
             }
         }
-        
+
         res.status(500).json({ error: 'AI Analysis failed: ' + error.message });
     }
 }

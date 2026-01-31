@@ -242,7 +242,8 @@ module.exports = {
                 posts (
                     id, post_url, published_date,
                     positive_percentage, negative_percentage, neutral_percentage,
-                    positive_remarks, negative_remarks, neutral_remarks, conclusion
+                    positive_remarks, negative_remarks, neutral_remarks, conclusion,
+                    comment_count
                 )
             `)
             .eq('constituency_id', constituencyId)
@@ -288,7 +289,8 @@ module.exports = {
                 positive_remarks: post?.positive_remarks || '',
                 negative_remarks: post?.negative_remarks || '',
                 neutral_remarks: post?.neutral_remarks || '',
-                conclusion: post?.conclusion || ''
+                conclusion: post?.conclusion || '',
+                comment_count: post?.comment_count || 0
             };
         });
     },
@@ -497,7 +499,8 @@ module.exports = {
                 positive_remarks: data.positive_remarks || '',
                 negative_remarks: data.negative_remarks || '',
                 neutral_remarks: data.neutral_remarks || '',
-                conclusion: data.conclusion || ''
+                conclusion: data.conclusion || '',
+                comment_count: data.comment_count || 0
             })
             .select('id')
             .single();
@@ -521,7 +524,8 @@ module.exports = {
                 positive_remarks: data.positive_remarks,
                 negative_remarks: data.negative_remarks,
                 neutral_remarks: data.neutral_remarks,
-                conclusion: data.conclusion
+                conclusion: data.conclusion,
+                comment_count: data.comment_count
             })
             .eq('id', id);
 

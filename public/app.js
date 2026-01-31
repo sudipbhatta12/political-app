@@ -135,6 +135,7 @@ const elements = {
     fileName: document.getElementById('fileName'),
     aiSubmitBtn: document.getElementById('aiSubmitBtn'),
     aiLoading: document.getElementById('aiLoading'),
+    aiSourceUrl: document.getElementById('aiSourceUrl'),
 
     // Timeline
     timelineSection: document.getElementById('timelineSection'),
@@ -424,10 +425,10 @@ async function loadCandidatesByConstituency(constituencyId, date = null) {
     }
 
     try {
-        const query = dateToFetch 
+        const query = dateToFetch
             ? `/candidates?constituency_id=${constituencyId}&date=${dateToFetch}`
             : `/candidates?constituency_id=${constituencyId}`;
-            
+
         state.candidates = await API.get(query);
         renderCandidateCards();
         renderSummaryChart();
@@ -443,7 +444,7 @@ async function loadConstituencyDates(constituencyId) {
         const dates = await API.get(`/constituency/${constituencyId}/dates`);
         state.availableDates = dates;
         state.currentDateIndex = 0; // Reset to newest
-        
+
         if (dates.length > 0) {
             elements.timelineSection.style.display = 'block';
         } else {
@@ -465,10 +466,10 @@ function updateTimelineUI() {
     elements.timelineSection.style.display = 'block';
     const dateStr = state.availableDates[state.currentDateIndex];
     const dateObj = new Date(dateStr);
-    
+
     // Format: "Wednesday, Jan 29, 2026"
-    elements.currentDateDisplay.textContent = dateObj.toLocaleDateString('en-US', { 
-        weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' 
+    elements.currentDateDisplay.textContent = dateObj.toLocaleDateString('en-US', {
+        weekday: 'long', year: 'numeric', month: 'short', day: 'numeric'
     });
 
     // Status text
@@ -490,7 +491,7 @@ function updateTimelineUI() {
 
 function changeDate(direction) {
     const newIndex = state.currentDateIndex + direction; // -1 for next (newer), +1 for prev (older)
-    
+
     if (newIndex >= 0 && newIndex < state.availableDates.length) {
         state.currentDateIndex = newIndex;
         const newDate = state.availableDates[newIndex];
@@ -608,7 +609,7 @@ function createCandidateCard(candidate, index, isSearchResult) {
             <span class="party-card__party-name">${escapeHtml(candidate.party_name)}</span>
             <div class="party-card__actions-top">
                 <button class="btn btn--icon btn--secondary edit-btn" title="Edit">✏️</button>
-                <button class="btn btn--icon btn--danger delete-btn" title="Delete">🗑️</button>
+                <button class="btn btn--icon btn--danger delete-btn" title="Delete Analysis">🗑️</button>
             </div>
         </div>
         <h3 class="party-card__candidate-name">${escapeHtml(candidate.name)}</h3>
@@ -620,21 +621,29 @@ function createCandidateCard(candidate, index, isSearchResult) {
         <div class="party-card__meta">
             ${hasPost ? `
                 <div class="party-card__meta-item">
-                    <span>🔗</span>
-                    <span class="post-link" data-url="${escapeHtml(post.post_url || '')}">
-                        ${(() => {
-                            try {
-                                return new URL(post.post_url).hostname;
-                            } catch (e) {
-                                return escapeHtml(post.post_url || 'Link');
-                            }
-                        })()}
-                    </span>
-                </div>
-                <div class="party-card__meta-item">
                     <span>📅</span>
                     <span>${post.published_date ? formatDate(post.published_date) : 'No date'}</span>
                 </div>
+                ${post.comment_count ? `
+                <div class="party-card__meta-item comment-count-badge" title="Comments Analyzed">
+                    <span>💬</span>
+                    <span>${post.comment_count.toLocaleString()}</span>
+                </div>
+                ` : ''}
+                ${post.post_url && post.post_url.startsWith('http') ? `
+                <div class="party-card__meta-item source-link" title="View Source Post">
+                    <span>🔗</span>
+                    <a href="#" class="view-source-link" data-url="${escapeHtml(post.post_url)}" style="color: var(--accent-primary); cursor: pointer;">
+                        ${(() => {
+                    try {
+                        return new URL(post.post_url).hostname;
+                    } catch (e) {
+                        return 'View Source';
+                    }
+                })()}
+                    </a>
+                </div>
+                ` : ''}
             ` : `
                 <div class="party-card__meta-item text-muted">
                     <i data-lucide="info" class="text-muted" style="width: 16px; height: 16px;"></i>
@@ -741,13 +750,20 @@ function createCandidateCard(candidate, index, isSearchResult) {
 
     card.querySelector('.delete-btn').addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (confirm(`Delete candidate "${candidate.name}"?`)) {
+        const post = candidate.posts?.[0];
+
+        if (!post || !post.id) {
+            showToast('No analysis to delete for this candidate', 'info');
+            return;
+        }
+
+        if (confirm(`Delete analysis for "${candidate.name}"? This will only remove the sentiment analysis, not the candidate profile.`)) {
             try {
-                await API.delete(`/candidates/${candidate.id}`);
-                showToast('Candidate deleted', 'success');
+                await API.delete(`/posts/${post.id}`);
+                showToast('Analysis deleted successfully', 'success');
                 loadCandidatesByConstituency(state.selectedConstituencyId);
             } catch (error) {
-                showToast('Failed to delete candidate', 'error');
+                showToast('Failed to delete analysis', 'error');
             }
         }
     });
@@ -780,6 +796,28 @@ function createCandidateCard(candidate, index, isSearchResult) {
             const url = postLink.dataset.url;
             if (url) {
                 openPostPreview(url);
+            }
+        });
+    }
+
+    // Source link click - open in popup window
+    const sourceLink = card.querySelector('.view-source-link');
+    if (sourceLink) {
+        sourceLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const url = sourceLink.dataset.url;
+            if (url) {
+                // Open in popup window
+                const width = 800;
+                const height = 600;
+                const left = (window.screen.width - width) / 2;
+                const top = (window.screen.height - height) / 2;
+                window.open(
+                    url,
+                    'SourcePostPopup',
+                    `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,resizable=yes`
+                );
             }
         });
     }
@@ -1414,7 +1452,7 @@ function renderLibraryTable() {
                     ...candidate,
                     posts: [candidate.post]
                 }];
-                renderCandidateCards(true); 
+                renderCandidateCards(true);
                 state.selectedConstituencyId = null;
                 elements.summarySection.style.display = 'none';
                 elements.partyGrid.scrollIntoView({ behavior: 'smooth' });
@@ -1442,31 +1480,31 @@ function renderLibraryTable() {
             e.stopPropagation();
             const candidateId = parseInt(btn.dataset.id);
             const candidate = libraryData.find(c => c.id === candidateId);
-            
+
             if (confirm(`Are you sure you want to delete the assessment for "${candidate.name}"? This action cannot be undone.`)) {
                 try {
                     // We delete the POST, not the candidate (unless you want to delete the candidate entirely?)
                     // The requirement says "delete data from library". 
                     // Usually this means deleting the analysis (post).
                     // If we delete the post, the candidate remains but won't show in library (filter(c => c.post)).
-                    
+
                     if (candidate.post && candidate.post.id) {
                         await API.delete(`/posts/${candidate.post.id}`);
                         showToast('Assessment deleted', 'success');
-                        
+
                         // Refresh library
                         openLibrary();
-                        
+
                         // If this candidate was currently displayed on dashboard, clear it
                         const currentCard = document.querySelector(`.party-card[data-candidate-id="${candidateId}"]`);
                         if (currentCard) {
-                             // If we are in "View" mode (single card), go home
-                             if (!state.selectedConstituencyId) {
-                                 goHome();
-                             } else {
-                                 // Reload constituency
-                                 loadCandidatesByConstituency(state.selectedConstituencyId);
-                             }
+                            // If we are in "View" mode (single card), go home
+                            if (!state.selectedConstituencyId) {
+                                goHome();
+                            } else {
+                                // Reload constituency
+                                loadCandidatesByConstituency(state.selectedConstituencyId);
+                            }
                         }
                     }
                 } catch (error) {
@@ -1854,7 +1892,7 @@ function initEventListeners() {
     elements.aiModal.addEventListener('click', (e) => {
         if (e.target === elements.aiModal) closeAIModal();
     });
-    
+
     // AI Form Location Selectors
     elements.aiProvince.addEventListener('change', (e) => {
         loadDistricts(e.target.value, null, elements.aiDistrict, elements.aiConstituency);
@@ -1879,7 +1917,7 @@ function initEventListeners() {
             console.error(error);
         }
     });
-    
+
     // File Upload Zone
     elements.fileUploadZone.addEventListener('click', () => elements.aiFile.click());
     elements.aiFile.addEventListener('change', (e) => {
@@ -1890,32 +1928,32 @@ function initEventListeners() {
             elements.fileUploadZone.style.background = 'rgba(16, 185, 129, 0.1)';
         }
     });
-    
+
     // Drag & Drop
     elements.fileUploadZone.addEventListener('dragover', (e) => {
         e.preventDefault();
         elements.fileUploadZone.style.borderColor = '#8b5cf6';
         elements.fileUploadZone.style.background = 'rgba(139, 92, 246, 0.1)';
     });
-    
+
     elements.fileUploadZone.addEventListener('dragleave', (e) => {
         e.preventDefault();
         elements.fileUploadZone.style.borderColor = 'rgba(255,255,255,0.2)';
         elements.fileUploadZone.style.background = 'transparent';
     });
-    
+
     elements.fileUploadZone.addEventListener('drop', (e) => {
         e.preventDefault();
         elements.fileUploadZone.style.borderColor = '#10b981';
         elements.fileUploadZone.style.background = 'rgba(16, 185, 129, 0.1)';
-        
+
         if (e.dataTransfer.files.length > 0) {
             elements.aiFile.files = e.dataTransfer.files;
             const count = e.dataTransfer.files.length;
             elements.fileName.textContent = count === 1 ? e.dataTransfer.files[0].name : `${count} files selected`;
         }
     });
-    
+
     elements.aiForm.addEventListener('submit', handleAISubmit);
 
     // Post Preview modal
@@ -2083,85 +2121,98 @@ async function openAIModal() {
     elements.aiProvince.value = '';
     resetSelect(elements.aiDistrict, 'Select District');
     resetSelect(elements.aiConstituency, 'Select Constituency');
-    
+
     elements.aiCandidateSelect.innerHTML = '<option value="">-- Select a Candidate --</option>';
     elements.aiCandidateSelect.disabled = true;
-    
+
     elements.fileName.textContent = 'Click to browse or drag up to 10 files here';
     elements.fileUploadZone.classList.remove('has-file');
     elements.fileUploadZone.style.borderColor = 'rgba(255,255,255,0.2)';
     elements.fileUploadZone.style.background = 'transparent';
     elements.aiLoading.style.display = 'none';
     elements.aiSubmitBtn.disabled = false;
-    
+
     // Load provinces
     await populateSelect(elements.aiProvince, state.provinces, 'name_en');
-    
+
     elements.aiModal.classList.add('active');
 }
 
 function closeAIModal() {
     if (elements.aiLoading.style.display === 'block') return; // Prevent closing while loading
     elements.aiModal.classList.remove('active');
+
+    // Reset the source URL field
+    if (elements.aiSourceUrl) {
+        elements.aiSourceUrl.value = '';
+    }
 }
 
 async function handleAISubmit(e) {
     e.preventDefault();
-    
+
     const candidateId = elements.aiCandidateSelect.value;
     const files = elements.aiFile.files;
-    
+
     if (!candidateId) {
         showToast('Please select a candidate', 'error');
         return;
     }
-    
+
     if (files.length === 0) {
         showToast('Please upload at least one file', 'error');
         return;
     }
-    
+
     if (files.length > 10) {
         showToast('Maximum 10 files allowed', 'error');
         return;
     }
-    
+
     // Show loading state
     elements.aiLoading.style.display = 'block';
     elements.aiSubmitBtn.disabled = true;
-    
+
     const formData = new FormData();
     formData.append('candidate_id', candidateId);
-    
+
+    // Add source URL if provided
+    const sourceUrl = elements.aiSourceUrl?.value?.trim();
+    if (sourceUrl) {
+        formData.append('source_url', sourceUrl);
+    }
+
     for (let i = 0; i < files.length; i++) {
         formData.append('files', files[i]);
     }
-    
+
     try {
         const response = await fetch('/api/ai-analyze', {
             method: 'POST',
             body: formData
         });
-        
+
         const data = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(data.error || 'Analysis failed');
         }
-        
-        showToast('Analysis complete! Result saved.', 'success');
-        
+
+        // Show comment count in success message
+        const commentCount = data.commentCount || 0;
+        showToast(`Analysis complete! ${commentCount.toLocaleString()} comments analyzed.`, 'success');
+
         // Reset loading state BEFORE closing to bypass the guard clause in closeAIModal
         elements.aiLoading.style.display = 'none';
         elements.aiSubmitBtn.disabled = false;
-        
+
         closeAIModal();
-        
+
         // Auto-navigate to the result
         const provinceId = elements.aiProvince.value;
         const districtId = elements.aiDistrict.value;
         const constituencyId = elements.aiConstituency.value;
-        
+
         // Update main filters
         elements.provinceSelect.value = provinceId;
         await loadDistricts(provinceId, null, elements.districtSelect, elements.constituencySelect);
@@ -2170,11 +2221,11 @@ async function handleAISubmit(e) {
         await loadConstituencies(districtId, elements.constituencySelect);
         elements.constituencySelect.value = constituencyId;
         elements.constituencySelect.disabled = false;
-        
+
         // Load candidates
         state.selectedConstituencyId = constituencyId;
         await loadCandidatesByConstituency(constituencyId);
-        
+
     } catch (error) {
         console.error(error);
         showToast(error.message, 'error');

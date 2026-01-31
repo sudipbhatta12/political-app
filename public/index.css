@@ -524,6 +524,20 @@ a:hover {
     white-space: nowrap;
 }
 
+/* Comment Count Badge */
+.comment-count-badge {
+    background: rgba(94, 92, 230, 0.15);
+    padding: 4px 10px;
+    border-radius: var(--radius-full);
+    color: var(--accent-secondary);
+    font-weight: 500;
+    font-size: 0.8125rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: fit-content;
+}
+
 .party-card__chart {
     height: 200px;
     margin-bottom: var(--spacing-md);
