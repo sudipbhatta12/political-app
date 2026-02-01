@@ -148,39 +148,47 @@ async function analyzeComments(req, res) {
         console.log('✅ Analysis complete:', analysis);
 
         // 3. Save to Database
-        // Check if candidate has a post FOR THIS DATE
-        const today = new Date().toISOString().split('T')[0];
+        // Check if candidate already has an analysis for this exact source URL
+        const sourceUrl = req.body.source_url;
         const existingPosts = await db.getPostsByCandidate(parseInt(candidate_id));
-        const postForToday = existingPosts.find(p => p.published_date === today);
+
+        // Check for duplicate URL (if source URL was provided)
+        if (sourceUrl) {
+            const duplicatePost = existingPosts.find(p => p.post_url === sourceUrl);
+            if (duplicatePost && !req.body.force_reanalyze) {
+                // Return warning about duplicate - let frontend ask user
+                return res.status(409).json({
+                    error: 'duplicate_url',
+                    message: 'This post URL has already been analyzed for this candidate.',
+                    existingPostId: duplicatePost.id,
+                    existingDate: duplicatePost.published_date,
+                    askConfirmation: true
+                });
+            }
+
+            // If force_reanalyze is true, delete the old post first
+            if (duplicatePost && req.body.force_reanalyze) {
+                await db.deletePost(duplicatePost.id);
+                console.log(`🗑️ Deleted existing post ID: ${duplicatePost.id} for re-analysis`);
+            }
+        }
 
         let postId = 0;
         const fileNames = req.files.map(f => f.originalname).join(', ');
+        const today = new Date().toISOString().split('T')[0];
 
         // Use the source URL if provided, otherwise use a descriptive text
-        const sourceUrl = req.body.source_url;
-        const postUrl = sourceUrl || `AI Analysis - ${req.files.length} file(s)`;
+        const postUrl = sourceUrl || `AI Analysis - ${req.files.length} file(s) - ${today}`;
 
-        if (postForToday) {
-            // Update existing post for TODAY
-            postId = postForToday.id;
-            await db.updatePost(postId, {
-                post_url: postUrl,
-                published_date: today,
-                comment_count: totalCommentCount,
-                ...analysis
-            });
-            console.log(`🔄 Updated existing post ID: ${postId} for date ${today}`);
-        } else {
-            // Create new post for TODAY (History preserved!)
-            postId = await db.createPost({
-                candidate_id: parseInt(candidate_id),
-                post_url: postUrl,
-                published_date: today,
-                comment_count: totalCommentCount,
-                ...analysis
-            });
-            console.log(`✨ Created new post ID: ${postId} for date ${today}`);
-        }
+        // Always create a new post (allows multiple posts per candidate)
+        postId = await db.createPost({
+            candidate_id: parseInt(candidate_id),
+            post_url: postUrl,
+            published_date: today,
+            comment_count: totalCommentCount,
+            ...analysis
+        });
+        console.log(`✨ Created new post ID: ${postId} for candidate ${candidate_id}`);
 
         // Cleanup uploaded files
         for (const file of req.files) {

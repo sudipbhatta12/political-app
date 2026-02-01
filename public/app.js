@@ -35,6 +35,7 @@ const state = {
     selectedConstituencyId: null,
     availableDates: [], // List of available dates strings
     currentDateIndex: 0, // 0 = newest
+    filterByDate: false, // Whether to filter by specific date (false = show all)
     charts: {},
     currentPostId: null,
     currentSentiment: null
@@ -245,6 +246,9 @@ function goHome() {
     // Reset state
     state.candidates = [];
     state.selectedConstituencyId = null;
+    state.filterByDate = false;
+    state.availableDates = [];
+    state.currentDateIndex = 0;
 
     // Show empty state, hide charts
     elements.partyGrid.innerHTML = '';
@@ -406,7 +410,7 @@ function populateCandidateSelector(candidates) {
 // ============================================
 // Candidates Loading & Display
 // ============================================
-async function loadCandidatesByConstituency(constituencyId, date = null) {
+async function loadCandidatesByConstituency(constituencyId, date = null, filterByDate = false) {
     if (!constituencyId) {
         renderEmptyState();
         return;
@@ -415,13 +419,19 @@ async function loadCandidatesByConstituency(constituencyId, date = null) {
     // If new constituency selected (not just date change), reset timeline
     if (constituencyId !== state.selectedConstituencyId) {
         state.selectedConstituencyId = constituencyId;
+        state.filterByDate = false; // Reset date filter for new constituency
         await loadConstituencyDates(constituencyId);
     }
 
-    // Determine date to fetch
-    let dateToFetch = date;
-    if (!date && state.availableDates.length > 0) {
-        dateToFetch = state.availableDates[state.currentDateIndex]; // Default to current selected index (usually 0/newest)
+    // Track if user wants to filter by date
+    if (filterByDate) {
+        state.filterByDate = true;
+    }
+
+    // Only filter by date if user explicitly requested it
+    let dateToFetch = null;
+    if (state.filterByDate && state.availableDates.length > 0) {
+        dateToFetch = date || state.availableDates[state.currentDateIndex];
     }
 
     try {
@@ -464,38 +474,63 @@ function updateTimelineUI() {
     }
 
     elements.timelineSection.style.display = 'block';
-    const dateStr = state.availableDates[state.currentDateIndex];
-    const dateObj = new Date(dateStr);
 
-    // Format: "Wednesday, Jan 29, 2026"
-    elements.currentDateDisplay.textContent = dateObj.toLocaleDateString('en-US', {
-        weekday: 'long', year: 'numeric', month: 'short', day: 'numeric'
-    });
-
-    // Status text
-    if (state.currentDateIndex === 0) {
-        elements.dateStatus.textContent = "Latest Data";
+    // Show "All Dates" when not filtering, otherwise show specific date
+    if (!state.filterByDate) {
+        elements.currentDateDisplay.textContent = 'All Dates';
+        elements.dateStatus.textContent = `${state.availableDates.length} date(s) available - Click arrows to filter`;
         elements.nextDateBtn.disabled = true;
+        elements.prevDateBtn.disabled = false; // Allow going to specific dates
     } else {
-        elements.dateStatus.textContent = "Historical Data";
-        elements.nextDateBtn.disabled = false;
-    }
+        const dateStr = state.availableDates[state.currentDateIndex];
+        const dateObj = new Date(dateStr);
 
-    // Disable Prev if at end
-    if (state.currentDateIndex >= state.availableDates.length - 1) {
-        elements.prevDateBtn.disabled = true;
-    } else {
-        elements.prevDateBtn.disabled = false;
+        // Format: "Wednesday, Jan 29, 2026"
+        elements.currentDateDisplay.textContent = dateObj.toLocaleDateString('en-US', {
+            weekday: 'long', year: 'numeric', month: 'short', day: 'numeric'
+        });
+
+        // Status text
+        if (state.currentDateIndex === 0) {
+            elements.dateStatus.textContent = "Latest Data";
+            elements.nextDateBtn.disabled = true;
+        } else {
+            elements.dateStatus.textContent = "Historical Data";
+            elements.nextDateBtn.disabled = false;
+        }
+
+        // Disable Prev if at end
+        if (state.currentDateIndex >= state.availableDates.length - 1) {
+            elements.prevDateBtn.disabled = true;
+        } else {
+            elements.prevDateBtn.disabled = false;
+        }
     }
 }
 
 function changeDate(direction) {
+    // If currently showing "All Dates" and user clicks prev (older), start filtering from newest
+    if (!state.filterByDate && direction === 1) {
+        state.filterByDate = true;
+        state.currentDateIndex = 0;
+        const newDate = state.availableDates[0];
+        loadCandidatesByConstituency(state.selectedConstituencyId, newDate, true);
+        return;
+    }
+
+    // If filtering and user clicks next (newer) at index 0, go back to "All Dates"
+    if (state.filterByDate && direction === -1 && state.currentDateIndex === 0) {
+        state.filterByDate = false;
+        loadCandidatesByConstituency(state.selectedConstituencyId, null, false);
+        return;
+    }
+
     const newIndex = state.currentDateIndex + direction; // -1 for next (newer), +1 for prev (older)
 
     if (newIndex >= 0 && newIndex < state.availableDates.length) {
         state.currentDateIndex = newIndex;
         const newDate = state.availableDates[newIndex];
-        loadCandidatesByConstituency(state.selectedConstituencyId, newDate);
+        loadCandidatesByConstituency(state.selectedConstituencyId, newDate, true);
     }
 }
 
@@ -601,15 +636,78 @@ function createCandidateCard(candidate, index, isSearchResult) {
     card.className = 'party-card';
     card.dataset.candidateId = candidate.id;
 
-    const post = candidate.posts?.[0] || {};
-    const hasPost = post.id;
+    const posts = candidate.posts || [];
+    const hasPosts = posts.length > 0 && posts[0].id;
+    const postCount = posts.filter(p => p.id).length;
+
+    // Calculate aggregated stats across all posts
+    let totalComments = 0;
+    let avgPositive = 0, avgNegative = 0, avgNeutral = 0;
+
+    if (hasPosts) {
+        const validPosts = posts.filter(p => p.id);
+        totalComments = validPosts.reduce((sum, p) => sum + (p.comment_count || 0), 0);
+        avgPositive = validPosts.reduce((sum, p) => sum + (p.positive_percentage || 0), 0) / validPosts.length;
+        avgNegative = validPosts.reduce((sum, p) => sum + (p.negative_percentage || 0), 0) / validPosts.length;
+        avgNeutral = validPosts.reduce((sum, p) => sum + (p.neutral_percentage || 0), 0) / validPosts.length;
+    }
+
+    // Build posts list HTML
+    const postsListHtml = hasPosts ? posts.filter(p => p.id).map((post, idx) => `
+        <div class="post-item ${idx === 0 ? 'post-item--active' : ''}" data-post-index="${idx}">
+            <div class="post-item__header" data-post-toggle="${idx}">
+                <div class="post-item__info">
+                    <span class="post-item__number">#${idx + 1}</span>
+                    <span class="post-item__date">📅 ${post.published_date ? formatDate(post.published_date) : 'No date'}</span>
+                    ${post.comment_count ? `<span class="post-item__comments">💬 ${post.comment_count.toLocaleString()}</span>` : ''}
+                </div>
+                <div class="post-item__sentiment-preview">
+                    <span class="text-positive">+${post.positive_percentage || 0}%</span>
+                    <span class="text-negative">-${post.negative_percentage || 0}%</span>
+                    <span class="text-neutral">~${post.neutral_percentage || 0}%</span>
+                </div>
+                <button class="post-item__toggle" data-post-toggle="${idx}">
+                    <i data-lucide="${idx === 0 ? 'chevron-up' : 'chevron-down'}" style="width: 16px; height: 16px;"></i>
+                </button>
+            </div>
+            <div class="post-item__content ${idx === 0 ? 'post-item__content--expanded' : ''}" data-post-content="${idx}">
+                ${post.post_url && post.post_url.startsWith('http') ? `
+                    <div class="post-item__source">
+                        🔗 <a href="#" class="view-source-link" data-url="${escapeHtml(post.post_url)}" style="color: var(--accent-primary);">
+                            ${(() => { try { return new URL(post.post_url).hostname; } catch (e) { return 'View Source'; } })()}
+                        </a>
+                    </div>
+                ` : ''}
+                <div class="post-item__chart" id="chart-${candidate.id}-${idx}"></div>
+                <div class="post-item__actions">
+                    <button class="btn btn--small btn--secondary view-remarks" data-remarks="${escapeHtml(post.positive_remarks || '')}" data-type="Positive">
+                        <span class="text-positive">Positive</span>
+                    </button>
+                    <button class="btn btn--small btn--secondary view-remarks" data-remarks="${escapeHtml(post.negative_remarks || '')}" data-type="Negative">
+                        <span class="text-negative">Negative</span>
+                    </button>
+                    <button class="btn btn--small btn--secondary view-remarks" data-remarks="${escapeHtml(post.neutral_remarks || '')}" data-type="Neutral">
+                        <span class="text-neutral">Neutral</span>
+                    </button>
+                </div>
+                ${post.conclusion ? `
+                    <button class="btn btn--small btn--primary view-conclusion" data-conclusion="${escapeHtml(post.conclusion)}" style="margin-top: 8px; width: 100%;">
+                        <i data-lucide="file-text" style="width: 14px; height: 14px;"></i>
+                        View Conclusion
+                    </button>
+                ` : ''}
+                <button class="btn btn--small btn--danger delete-post-btn" data-post-id="${post.id}" style="margin-top: 8px; width: 100%;">
+                    🗑️ Delete This Analysis
+                </button>
+            </div>
+        </div>
+    `).join('') : '';
 
     card.innerHTML = `
         <div class="party-card__header">
             <span class="party-card__party-name">${escapeHtml(candidate.party_name)}</span>
             <div class="party-card__actions-top">
-                <button class="btn btn--icon btn--secondary edit-btn" title="Edit">✏️</button>
-                <button class="btn btn--icon btn--danger delete-btn" title="Delete Analysis">🗑️</button>
+                <button class="btn btn--icon btn--secondary edit-btn" title="Edit Candidate">✏️</button>
             </div>
         </div>
         <h3 class="party-card__candidate-name">${escapeHtml(candidate.name)}</h3>
@@ -618,154 +716,143 @@ function createCandidateCard(candidate, index, isSearchResult) {
                 ${candidate.constituency_name}, ${candidate.district_name}
             </p>
         ` : ''}
-        <div class="party-card__meta">
-            ${hasPost ? `
-                <div class="party-card__meta-item">
-                    <span>📅</span>
-                    <span>${post.published_date ? formatDate(post.published_date) : 'No date'}</span>
+        
+        <!-- Summary Stats -->
+        <div class="party-card__summary">
+            ${hasPosts ? `
+                <div class="summary-stats">
+                    <div class="summary-stat">
+                        <span class="summary-stat__value">${postCount}</span>
+                        <span class="summary-stat__label">Post${postCount > 1 ? 's' : ''}</span>
+                    </div>
+                    <div class="summary-stat">
+                        <span class="summary-stat__value">${totalComments.toLocaleString()}</span>
+                        <span class="summary-stat__label">Comments</span>
+                    </div>
+                    <div class="summary-stat summary-stat--positive">
+                        <span class="summary-stat__value text-positive">+${avgPositive.toFixed(0)}%</span>
+                        <span class="summary-stat__label">Avg Positive</span>
+                    </div>
+                    <div class="summary-stat summary-stat--negative">
+                        <span class="summary-stat__value text-negative">-${avgNegative.toFixed(0)}%</span>
+                        <span class="summary-stat__label">Avg Negative</span>
+                    </div>
                 </div>
-                ${post.comment_count ? `
-                <div class="party-card__meta-item comment-count-badge" title="Comments Analyzed">
-                    <span>💬</span>
-                    <span>${post.comment_count.toLocaleString()}</span>
-                </div>
-                ` : ''}
-                ${post.post_url && post.post_url.startsWith('http') ? `
-                <div class="party-card__meta-item source-link" title="View Source Post">
-                    <span>🔗</span>
-                    <a href="#" class="view-source-link" data-url="${escapeHtml(post.post_url)}" style="color: var(--accent-primary); cursor: pointer;">
-                        ${(() => {
-                    try {
-                        return new URL(post.post_url).hostname;
-                    } catch (e) {
-                        return 'View Source';
-                    }
-                })()}
-                    </a>
-                </div>
-                ` : ''}
             ` : `
                 <div class="party-card__meta-item text-muted">
                     <i data-lucide="info" class="text-muted" style="width: 16px; height: 16px;"></i>
-                    <span>No post data yet</span>
+                    <span>No analyses yet - use AI Analyze to add posts</span>
                 </div>
             `}
         </div>
-        <div class="party-card__chart" id="chart-${candidate.id}"></div>
-        ${hasPost ? `
-            <div class="party-card__actions">
-                <button class="btn btn--small btn--secondary view-remarks" data-remarks="${escapeHtml(post.positive_remarks || '')}" data-type="Positive">
-                    <span class="text-positive">+${post.positive_percentage || 0}%</span>
-                </button>
-                <button class="btn btn--small btn--secondary view-remarks" data-remarks="${escapeHtml(post.negative_remarks || '')}" data-type="Negative">
-                    <span class="text-negative">-${post.negative_percentage || 0}%</span>
-                </button>
-                <button class="btn btn--small btn--secondary view-remarks" data-remarks="${escapeHtml(post.neutral_remarks || '')}" data-type="Neutral">
-                    <span class="text-neutral">~${post.neutral_percentage || 0}%</span>
-                </button>
+        
+        <!-- Posts List -->
+        ${hasPosts ? `
+            <div class="posts-list">
+                <div class="posts-list__header">
+                    <h4>📊 Analyzed Posts</h4>
+                </div>
+                ${postsListHtml}
             </div>
-            ${post.conclusion ? `
-                <button class="btn btn--small btn--primary view-conclusion" data-conclusion="${escapeHtml(post.conclusion)}" style="margin-top: 8px; width: 100%;">
-                    <i data-lucide="file-text" style="width: 14px; height: 14px;"></i>
-                    View Conclusion
-                </button>
-            ` : ''}
         ` : ''}
     `;
 
-    // Render pie chart
-    setTimeout(() => {
-        const chartEl = document.getElementById(`chart-${candidate.id}`);
-        if (chartEl && hasPost) {
-            state.charts[candidate.id] = new ApexCharts(chartEl, {
-                chart: {
-                    type: 'donut',
-                    height: 180,
-                    background: 'transparent',
-                    animations: {
-                        enabled: true,
-                        easing: 'easeinout',
-                        speed: 800
-                    },
-                    events: {
-                        dataPointSelection: (event, chartContext, config) => {
-                            const sentiments = ['Positive', 'Negative', 'Neutral'];
-                            const remarks = [
-                                post.positive_remarks || '',
-                                post.negative_remarks || '',
-                                post.neutral_remarks || ''
-                            ];
-                            openRemarksModal(sentiments[config.dataPointIndex], remarks[config.dataPointIndex]);
-                        }
-                    }
-                },
-                series: [
-                    post.positive_percentage || 0,
-                    post.negative_percentage || 0,
-                    post.neutral_percentage || 0
-                ],
-                labels: ['Positive', 'Negative', 'Neutral'],
-                colors: ['#10b981', '#ef4444', '#6b7280'],
-                legend: {
-                    show: true,
-                    position: 'bottom',
-                    labels: { colors: '#a0a0b0' },
-                    fontSize: '12px'
-                },
-                dataLabels: {
-                    enabled: true,
-                    formatter: (val) => `${val.toFixed(0)}%`,
-                    style: { fontSize: '11px' }
-                },
-                plotOptions: {
-                    pie: {
-                        donut: {
-                            size: '60%',
-                            labels: {
-                                show: true,
-                                name: { show: true, color: '#a0a0b0' },
-                                value: {
-                                    show: true,
-                                    color: '#ffffff',
-                                    formatter: (val) => `${val}%`
+    // Render charts for each post (with delay for animation)
+    if (hasPosts) {
+        posts.filter(p => p.id).forEach((post, idx) => {
+            setTimeout(() => {
+                const chartEl = document.getElementById(`chart-${candidate.id}-${idx}`);
+                if (chartEl) {
+                    const chartKey = `${candidate.id}-${idx}`;
+                    state.charts[chartKey] = new ApexCharts(chartEl, {
+                        chart: {
+                            type: 'donut',
+                            height: 160,
+                            background: 'transparent',
+                            animations: { enabled: true, easing: 'easeinout', speed: 600 },
+                            events: {
+                                dataPointSelection: (event, chartContext, config) => {
+                                    const sentiments = ['Positive', 'Negative', 'Neutral'];
+                                    const remarks = [
+                                        post.positive_remarks || '',
+                                        post.negative_remarks || '',
+                                        post.neutral_remarks || ''
+                                    ];
+                                    openRemarksModal(sentiments[config.dataPointIndex], remarks[config.dataPointIndex]);
                                 }
                             }
-                        }
-                    }
-                },
-                stroke: { show: false },
-                tooltip: { theme: 'dark' }
-            });
-            state.charts[candidate.id].render();
-        } else if (chartEl) {
-            chartEl.innerHTML = '<p class="text-center text-muted">Add post data to see chart</p>';
-        }
-    }, 100 * index);
+                        },
+                        series: [
+                            post.positive_percentage || 0,
+                            post.negative_percentage || 0,
+                            post.neutral_percentage || 0
+                        ],
+                        labels: ['Positive', 'Negative', 'Neutral'],
+                        colors: ['#10b981', '#ef4444', '#6b7280'],
+                        legend: { show: false },
+                        dataLabels: {
+                            enabled: true,
+                            formatter: (val) => `${val.toFixed(0)}%`,
+                            style: { fontSize: '10px' }
+                        },
+                        plotOptions: {
+                            pie: {
+                                donut: {
+                                    size: '55%',
+                                    labels: { show: false }
+                                }
+                            }
+                        },
+                        stroke: { show: false },
+                        tooltip: { theme: 'dark' }
+                    });
+                    state.charts[chartKey].render();
+                }
+            }, 100 * (index + idx));
+        });
+    }
 
-    // Event listeners
-    card.querySelector('.edit-btn').addEventListener('click', (e) => {
-        e.stopPropagation();
-        openCandidateModal(candidate, post);
+    // Post toggle event listeners
+    card.querySelectorAll('[data-post-toggle]').forEach(toggle => {
+        toggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const idx = toggle.dataset.postToggle;
+            const content = card.querySelector(`[data-post-content="${idx}"]`);
+            const icon = toggle.querySelector('i') || toggle.parentElement.querySelector('.post-item__toggle i');
+
+            if (content) {
+                content.classList.toggle('post-item__content--expanded');
+                if (icon) {
+                    const isExpanded = content.classList.contains('post-item__content--expanded');
+                    icon.setAttribute('data-lucide', isExpanded ? 'chevron-up' : 'chevron-down');
+                    lucide.createIcons({ node: icon.parentElement });
+                }
+            }
+        });
     });
 
-    card.querySelector('.delete-btn').addEventListener('click', async (e) => {
+    // Event listeners - Edit candidate button
+    card.querySelector('.edit-btn').addEventListener('click', (e) => {
         e.stopPropagation();
-        const post = candidate.posts?.[0];
+        openCandidateModal(candidate, posts[0] || {});
+    });
 
-        if (!post || !post.id) {
-            showToast('No analysis to delete for this candidate', 'info');
-            return;
-        }
+    // Delete individual post buttons
+    card.querySelectorAll('.delete-post-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const postId = btn.dataset.postId;
 
-        if (confirm(`Delete analysis for "${candidate.name}"? This will only remove the sentiment analysis, not the candidate profile.`)) {
-            try {
-                await API.delete(`/posts/${post.id}`);
-                showToast('Analysis deleted successfully', 'success');
-                loadCandidatesByConstituency(state.selectedConstituencyId);
-            } catch (error) {
-                showToast('Failed to delete analysis', 'error');
+            if (confirm(`Delete this analysis? This action cannot be undone.`)) {
+                try {
+                    await API.delete(`/posts/${postId}`);
+                    showToast('Analysis deleted successfully', 'success');
+                    loadCandidatesByConstituency(state.selectedConstituencyId);
+                } catch (error) {
+                    showToast('Failed to delete analysis', 'error');
+                }
             }
-        }
+        });
     });
 
     // Remarks buttons (percentage buttons)
@@ -778,37 +865,22 @@ function createCandidateCard(candidate, index, isSearchResult) {
         });
     });
 
-    // Conclusion button
-    const conclusionBtn = card.querySelector('.view-conclusion');
-    if (conclusionBtn) {
-        conclusionBtn.addEventListener('click', (e) => {
+    // Conclusion buttons
+    card.querySelectorAll('.view-conclusion').forEach(btn => {
+        btn.addEventListener('click', (e) => {
             e.stopPropagation();
-            const conclusion = conclusionBtn.dataset.conclusion;
+            const conclusion = btn.dataset.conclusion;
             openRemarksModal('Conclusion', conclusion);
         });
-    }
-
-    // Post link click - open preview modal
-    const postLink = card.querySelector('.post-link');
-    if (postLink) {
-        postLink.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const url = postLink.dataset.url;
-            if (url) {
-                openPostPreview(url);
-            }
-        });
-    }
+    });
 
     // Source link click - open in popup window
-    const sourceLink = card.querySelector('.view-source-link');
-    if (sourceLink) {
+    card.querySelectorAll('.view-source-link').forEach(sourceLink => {
         sourceLink.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
             const url = sourceLink.dataset.url;
             if (url) {
-                // Open in popup window
                 const width = 800;
                 const height = 600;
                 const left = (window.screen.width - width) / 2;
@@ -820,7 +892,7 @@ function createCandidateCard(candidate, index, isSearchResult) {
                 );
             }
         });
-    }
+    });
 
     // Initialize Lucide icons in the card
     lucide.createIcons({ node: card });
@@ -2194,13 +2266,47 @@ async function handleAISubmit(e) {
 
         const data = await response.json();
 
-        if (!response.ok) {
-            throw new Error(data.error || 'Analysis failed');
-        }
+        // Handle duplicate URL warning
+        if (response.status === 409 && data.error === 'duplicate_url') {
+            elements.aiLoading.style.display = 'none';
+            elements.aiSubmitBtn.disabled = false;
 
-        // Show comment count in success message
-        const commentCount = data.commentCount || 0;
-        showToast(`Analysis complete! ${commentCount.toLocaleString()} comments analyzed.`, 'success');
+            const confirmReanalyze = confirm(
+                `⚠️ This post URL has already been analyzed for this candidate.\n\n` +
+                `Previous analysis date: ${data.existingDate || 'Unknown'}\n\n` +
+                `Do you want to delete the previous analysis and run a new one?`
+            );
+
+            if (confirmReanalyze) {
+                // Re-submit with force flag
+                formData.append('force_reanalyze', 'true');
+                elements.aiLoading.style.display = 'block';
+                elements.aiSubmitBtn.disabled = true;
+
+                const retryResponse = await fetch('/api/ai-analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const retryData = await retryResponse.json();
+
+                if (!retryResponse.ok) {
+                    throw new Error(retryData.error || 'Analysis failed');
+                }
+
+                const commentCount = retryData.commentCount || 0;
+                showToast(`Re-analysis complete! ${commentCount.toLocaleString()} comments analyzed.`, 'success');
+            } else {
+                showToast('Analysis cancelled - using existing results', 'info');
+                return;
+            }
+        } else if (!response.ok) {
+            throw new Error(data.error || 'Analysis failed');
+        } else {
+            // Show comment count in success message
+            const commentCount = data.commentCount || 0;
+            showToast(`Analysis complete! ${commentCount.toLocaleString()} comments analyzed.`, 'success');
+        }
 
         // Reset loading state BEFORE closing to bypass the guard clause in closeAIModal
         elements.aiLoading.style.display = 'none';
