@@ -1157,7 +1157,7 @@ function updateWinnerSection(candidatesWithPosts) {
                         value: { show: true, color: '#fff', formatter: (val) => `${val}%` },
                         total: {
                             show: true,
-                            label: 'Winner',
+                            label: '#1',
                             color: '#ffd700',
                             formatter: () => `${post.positive_percentage}%`
                         }
