@@ -2260,8 +2260,8 @@ async function loadRecentConstituencies() {
                     .replace('निर्वाचन क्षेत्र', '#');
 
                 return `
-                <div class="recent-tag" onclick="openRecentConstituency(${c.constituency_id}, ${c.province_id}, ${c.district_id})">
-                    <i data-lucide="clock"></i>
+                <div class="recent-tag" onclick="openRecentConstituency(${c.constituency_id}, ${c.province_id}, ${c.district_id})" style="display: inline-flex; align-items: center; gap: 6px;">
+                    <i data-lucide="clock" style="width: 14px; height: 14px; flex-shrink: 0;"></i>
                     <span>${shortName}, ${c.district_name}</span>
                 </div>
             `}).join('');
