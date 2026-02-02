@@ -339,6 +339,7 @@
 
                 if (data.success) {
                     localStorage.setItem('authToken', data.token);
+                    localStorage.setItem('userRole', data.role); // Store role (admin/viewer)
                     window.location.href = '/app';
                 } else {
                     errorMessage.classList.add('show');

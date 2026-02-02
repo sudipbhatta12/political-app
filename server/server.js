@@ -20,7 +20,8 @@ const upload = multer({
     limits: { fileSize: 20 * 1024 * 1024 } // 20MB limit
 });
 // Authentication configuration
-const APP_PASSWORD = process.env.APP_PASSWORD || 'nepal2026';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'adminnepal2026';
+const VIEWER_PASSWORD = process.env.VIEWER_PASSWORD || 'nepal2026';
 const SECRET_KEY = process.env.SECRET_KEY || crypto.randomBytes(32).toString('hex');
 const tokens = new Set(); // Store valid tokens in memory
 
@@ -45,18 +46,30 @@ app.get('/_ah/health', (req, res) => res.status(200).send('OK')); // App Engine 
 // Login endpoint
 app.post('/api/login', async (req, res) => {
     const { password } = req.body;
+    let role = null;
 
-    if (password === APP_PASSWORD) {
+    if (password === ADMIN_PASSWORD) {
+        role = 'admin';
+    } else if (password === VIEWER_PASSWORD) {
+        role = 'viewer';
+    }
+
+    if (role) {
         const token = crypto.randomBytes(32).toString('hex');
-        const success = await db.createSession(token);
 
-        if (success) {
-            res.json({ success: true, token });
-        } else {
-            res.status(500).json({ success: false, message: 'Database error' });
+        // Store in memory for immediate access/fallback
+        tokens.add(token);
+
+        // Try to persist to DB, but don't block login if it fails (e.g. local dev without DB)
+        try {
+            await db.createSession(token);
+        } catch (err) {
+            console.error("Database session creation failed (using in-memory):", err.message);
         }
+
+        res.json({ success: true, token, role });
     } else {
-        res.json({ success: false, message: 'Wrong password' });
+        res.json({ success: false, message: 'Invalid password' });
     }
 });
 
@@ -65,6 +78,12 @@ app.post('/api/verify', async (req, res) => {
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
         const token = authHeader.slice(7);
+
+        // Check memory first
+        if (tokens.has(token)) {
+            return res.json({ valid: true });
+        }
+
         const isValid = await db.verifySession(token);
         res.json({ valid: isValid });
     } else {
@@ -77,6 +96,7 @@ app.post('/api/logout', async (req, res) => {
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
         const token = authHeader.slice(7);
+        tokens.delete(token); // Remove from memory
         await db.deleteSession(token);
     }
     res.json({ success: true });

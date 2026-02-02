@@ -47,6 +47,7 @@ const state = {
 const elements = {
     // Header
     homeBtn: document.getElementById('homeBtn'),
+    logoutBtn: document.getElementById('logoutBtn'),
 
     // Filters
     searchBox: document.querySelector('.search-box'),
@@ -227,6 +228,62 @@ function showToast(message, type = 'info') {
         toast.style.animation = 'slideIn 0.3s ease reverse';
         setTimeout(() => toast.remove(), 300);
     }, 3000);
+}
+
+// ============================================
+// Role-Based Access Control
+// ============================================
+function checkUserRole() {
+    const role = localStorage.getItem('userRole');
+
+    if (role === 'viewer') {
+        // Hide "Add Post Data" button
+        if (elements.addCandidateBtn) elements.addCandidateBtn.style.display = 'none';
+
+        // Hide "AI Analysis" button
+        if (elements.aiBtn) elements.aiBtn.style.display = 'none';
+
+        // Hide Search Box completely
+        const searchSection = document.querySelector('.filters__search');
+        if (searchSection) searchSection.style.display = 'none';
+
+        // Add Viewer Badge
+        const headerTitle = document.querySelector('.header__title');
+        if (headerTitle) {
+            const badge = document.createElement('span');
+            badge.textContent = ' (Viewer Mode)';
+            badge.style.fontSize = '0.8em';
+            badge.style.opacity = '0.7';
+            headerTitle.appendChild(badge);
+        }
+    }
+}
+
+// Call on load
+document.addEventListener('DOMContentLoaded', checkUserRole);
+
+// ============================================
+// Logout Functionality
+// ============================================
+if (elements.logoutBtn) {
+    elements.logoutBtn.addEventListener('click', async () => {
+        // Optional: Call server to invalidate token
+        try {
+            const token = localStorage.getItem('authToken');
+            if (token) {
+                await API.post('/logout', {}, false); // Pass false to startLoading to avoid spinner on exit
+            }
+        } catch (e) {
+            console.warn('Logout server call failed', e);
+        }
+
+        // Clear local storage
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('userRole');
+
+        // Redirect to login
+        window.location.href = '/';
+    });
 }
 
 // ============================================
@@ -612,8 +669,9 @@ function renderCandidateCards(isSearchResult = false) {
         elements.partyGrid.appendChild(card);
     });
 
-    // Always show "Add More Candidate" card when constituency is selected
-    if (!isSearchResult && state.selectedConstituencyId) {
+    // Always show "Add More Candidate" card when constituency is selected (Only for Admin)
+    const isViewer = localStorage.getItem('userRole') === 'viewer';
+    if (!isSearchResult && state.selectedConstituencyId && !isViewer) {
         const constituencyName = elements.constituencySelect.options[elements.constituencySelect.selectedIndex]?.text || '';
         const addCard = document.createElement('div');
         addCard.className = 'party-card add-party-card';
@@ -651,6 +709,9 @@ function createCandidateCard(candidate, index, isSearchResult) {
         avgNegative = validPosts.reduce((sum, p) => sum + (p.negative_percentage || 0), 0) / validPosts.length;
         avgNeutral = validPosts.reduce((sum, p) => sum + (p.neutral_percentage || 0), 0) / validPosts.length;
     }
+
+    // Check role
+    const isViewer = localStorage.getItem('userRole') === 'viewer';
 
     // Build posts list HTML
     const postsListHtml = hasPosts ? posts.filter(p => p.id).map((post, idx) => `
@@ -696,9 +757,11 @@ function createCandidateCard(candidate, index, isSearchResult) {
                         View Conclusion
                     </button>
                 ` : ''}
+                ${!isViewer ? `
                 <button class="btn btn--small btn--danger delete-post-btn" data-post-id="${post.id}" style="margin-top: 8px; width: 100%;">
                     🗑️ Delete This Analysis
                 </button>
+                ` : ''}
             </div>
         </div>
     `).join('') : '';
@@ -707,7 +770,7 @@ function createCandidateCard(candidate, index, isSearchResult) {
         <div class="party-card__header">
             <span class="party-card__party-name">${escapeHtml(candidate.party_name)}</span>
             <div class="party-card__actions-top">
-                <button class="btn btn--icon btn--secondary edit-btn" title="Edit Candidate">✏️</button>
+                ${!isViewer ? `<button class="btn btn--icon btn--secondary edit-btn" title="Edit Candidate">✏️</button>` : ''}
             </div>
         </div>
         <h3 class="party-card__candidate-name">${escapeHtml(candidate.name)}</h3>
@@ -1334,11 +1397,12 @@ function renderComments(comments) {
         return;
     }
 
+    const isViewer = localStorage.getItem('userRole') === 'viewer';
     elements.commentsList.innerHTML = comments.map(comment => `
         <div class="comment-item comment-item--${comment.sentiment}">
             <p class="comment-item__text">${escapeHtml(comment.content)}</p>
             <div class="comment-item__actions">
-                <button class="btn btn--small btn--danger delete-comment" data-id="${comment.id}">Delete</button>
+                ${!isViewer ? `<button class="btn btn--small btn--danger delete-comment" data-id="${comment.id}">Delete</button>` : ''}
             </div>
         </div>
     `).join('');
@@ -1480,6 +1544,7 @@ function renderLibraryTable() {
         return;
     }
 
+    const isViewer = localStorage.getItem('userRole') === 'viewer';
     elements.libraryTableBody.innerHTML = filteredData.map(candidate => {
         const post = candidate.post;
         return `
@@ -1498,9 +1563,11 @@ function renderLibraryTable() {
                     <button class="btn btn--icon btn--secondary export-excel" title="Export Excel" data-id="${candidate.id}">
                         <i data-lucide="file-spreadsheet"></i>
                     </button>
+                    ${!isViewer ? `
                     <button class="btn btn--icon btn--danger delete-library-item" title="Delete" data-id="${candidate.id}">
                         <i data-lucide="trash-2"></i>
                     </button>
+                    ` : ''}
                 </td>
             </tr>
         `;
