@@ -6,9 +6,12 @@ const { parse } = require('csv-parse/sync');
 const db = require('./database');
 
 // Initialize Gemini
-// Fallback to the provided key if env var is missing
-const API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyAPPyEtnTp1Q-E8Ii-HN-voWEARNeQjOGc';
-const genAI = new GoogleGenerativeAI(API_KEY);
+// CRITICAL: Key must be provided via environment variable GEMINI_API_KEY in Cloud Run
+const apiKey = process.env.GEMINI_API_KEY;
+if (!apiKey) {
+    console.error("❌ GEMINI_API_KEY is missing from environment variables!");
+}
+const genAI = new GoogleGenerativeAI(apiKey);
 
 // Helper: Extract text from different file types
 async function extractTextFromFile(file) {
