@@ -24,6 +24,48 @@ function debounce(func, wait) {
     };
 }
 
+/**
+ * Calculate sentiment stats weighted by comment count
+ * Posts with more comments have proportionally larger impact on the average.
+ * Falls back to simple average if no comments exist.
+ * @param {Array} posts - Array of post objects
+ * @returns {Object} { avgPositive, avgNegative, avgNeutral, totalComments, postCount }
+ */
+function calculateWeightedStats(posts) {
+    const validPosts = posts.filter(p => p.id);
+    const postCount = validPosts.length;
+
+    if (postCount === 0) {
+        return { avgPositive: 0, avgNegative: 0, avgNeutral: 0, totalComments: 0, postCount: 0 };
+    }
+
+    const totalComments = validPosts.reduce((sum, p) => sum + (p.comment_count || 0), 0);
+
+    // If no comments at all, fall back to simple average
+    if (totalComments === 0) {
+        return {
+            avgPositive: validPosts.reduce((sum, p) => sum + (p.positive_percentage || 0), 0) / postCount,
+            avgNegative: validPosts.reduce((sum, p) => sum + (p.negative_percentage || 0), 0) / postCount,
+            avgNeutral: validPosts.reduce((sum, p) => sum + (p.neutral_percentage || 0), 0) / postCount,
+            totalComments: 0,
+            postCount
+        };
+    }
+
+    // Weighted Average: (Sum of (Percentage * Comments)) / Total Comments
+    const weightedPositive = validPosts.reduce((sum, p) => sum + ((p.positive_percentage || 0) * (p.comment_count || 0)), 0) / totalComments;
+    const weightedNegative = validPosts.reduce((sum, p) => sum + ((p.negative_percentage || 0) * (p.comment_count || 0)), 0) / totalComments;
+    const weightedNeutral = validPosts.reduce((sum, p) => sum + ((p.neutral_percentage || 0) * (p.comment_count || 0)), 0) / totalComments;
+
+    return {
+        avgPositive: weightedPositive,
+        avgNegative: weightedNegative,
+        avgNeutral: weightedNeutral,
+        totalComments,
+        postCount
+    };
+}
+
 // ============================================
 // State Management
 // ============================================
@@ -696,19 +738,9 @@ function createCandidateCard(candidate, index, isSearchResult) {
 
     const posts = candidate.posts || [];
     const hasPosts = posts.length > 0 && posts[0].id;
-    const postCount = posts.filter(p => p.id).length;
-
-    // Calculate aggregated stats across all posts
-    let totalComments = 0;
-    let avgPositive = 0, avgNegative = 0, avgNeutral = 0;
-
-    if (hasPosts) {
-        const validPosts = posts.filter(p => p.id);
-        totalComments = validPosts.reduce((sum, p) => sum + (p.comment_count || 0), 0);
-        avgPositive = validPosts.reduce((sum, p) => sum + (p.positive_percentage || 0), 0) / validPosts.length;
-        avgNegative = validPosts.reduce((sum, p) => sum + (p.negative_percentage || 0), 0) / validPosts.length;
-        avgNeutral = validPosts.reduce((sum, p) => sum + (p.neutral_percentage || 0), 0) / validPosts.length;
-    }
+    // Calculate aggregated stats across all posts using WEIGHTED AVERAGE
+    const stats = calculateWeightedStats(posts);
+    const { avgPositive, avgNegative, avgNeutral, totalComments, postCount } = stats;
 
     // Check role
     const isViewer = localStorage.getItem('userRole') === 'viewer';
@@ -1020,9 +1052,10 @@ function renderSummaryChart() {
 
     elements.summarySection.style.display = 'block';
     const categories = candidatesWithPosts.map(c => c.party_name);
-    const positiveData = candidatesWithPosts.map(c => c.posts?.[0]?.positive_percentage || 0);
-    const negativeData = candidatesWithPosts.map(c => c.posts?.[0]?.negative_percentage || 0);
-    const neutralData = candidatesWithPosts.map(c => c.posts?.[0]?.neutral_percentage || 0);
+    // Use WEIGHTED AVERAGE for summary chart (instead of just first post)
+    const positiveData = candidatesWithPosts.map(c => calculateWeightedStats(c.posts || []).avgPositive);
+    const negativeData = candidatesWithPosts.map(c => calculateWeightedStats(c.posts || []).avgNegative);
+    const neutralData = candidatesWithPosts.map(c => calculateWeightedStats(c.posts || []).avgNeutral);
 
     state.charts.summary = new ApexCharts(elements.summaryChart, {
         chart: {
@@ -1103,27 +1136,32 @@ function updateWinnerSection(candidatesWithPosts) {
         return;
     }
 
-    // Find candidate with highest positive percentage
-    const winner = candidatesWithPosts.reduce((best, current) => {
-        const bestPositive = best.posts?.[0]?.positive_percentage || 0;
-        const currentPositive = current.posts?.[0]?.positive_percentage || 0;
-        return currentPositive > bestPositive ? current : best;
+    // Find candidate with highest WEIGHTED positive percentage
+    const candidatesWithStats = candidatesWithPosts.map(c => ({
+        ...c,
+        stats: calculateWeightedStats(c.posts || [])
+    }));
+
+    const winner = candidatesWithStats.reduce((best, current) => {
+        return current.stats.avgPositive > best.stats.avgPositive ? current : best;
     });
 
-    const post = winner.posts?.[0];
+    const winnerStats = winner.stats;
+    const post = winner.posts?.[0]; // Still used for remarks
+
     if (!post) {
         elements.winnerSection.style.display = 'none';
         return;
     }
 
-    // Update winner info
+    // Update winner info with WEIGHTED AVERAGES
     elements.winnerName.textContent = winner.name;
     elements.winnerParty.textContent = winner.party_name;
-    elements.winnerPositive.textContent = `${post.positive_percentage || 0}%`;
-    elements.winnerNegative.textContent = `${post.negative_percentage || 0}%`;
-    elements.winnerNeutral.textContent = `${post.neutral_percentage || 0}%`;
+    elements.winnerPositive.textContent = `${winnerStats.avgPositive.toFixed(0)}%`;
+    elements.winnerNegative.textContent = `${winnerStats.avgNegative.toFixed(0)}%`;
+    elements.winnerNeutral.textContent = `${winnerStats.avgNeutral.toFixed(0)}%`;
 
-    // Update remarks
+    // Update remarks (from first/latest post)
     elements.winnerPositiveRemarks.textContent = post.positive_remarks || 'No remarks available';
     elements.winnerNegativeRemarks.textContent = post.negative_remarks || 'No remarks available';
     elements.winnerNeutralRemarks.textContent = post.neutral_remarks || 'No remarks available';
@@ -1141,9 +1179,9 @@ function updateWinnerSection(candidatesWithPosts) {
             background: 'transparent'
         },
         series: [
-            post.positive_percentage || 0,
-            post.negative_percentage || 0,
-            post.neutral_percentage || 0
+            winnerStats.avgPositive,
+            winnerStats.avgNegative,
+            winnerStats.avgNeutral
         ],
         labels: ['Positive', 'Negative', 'Neutral'],
         colors: ['#30d158', '#ff453a', '#8e8e93'],
@@ -1154,12 +1192,12 @@ function updateWinnerSection(candidatesWithPosts) {
                     labels: {
                         show: true,
                         name: { show: true, color: '#fff' },
-                        value: { show: true, color: '#fff', formatter: (val) => `${val}%` },
+                        value: { show: true, color: '#fff', formatter: (val) => `${val.toFixed(0)}%` },
                         total: {
                             show: true,
                             label: '#1',
                             color: '#ffd700',
-                            formatter: () => `${post.positive_percentage}%`
+                            formatter: () => `${winnerStats.avgPositive.toFixed(0)}%`
                         }
                     }
                 }
