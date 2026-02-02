@@ -243,7 +243,7 @@ module.exports = {
                     id, post_url, published_date,
                     positive_percentage, negative_percentage, neutral_percentage,
                     positive_remarks, negative_remarks, neutral_remarks, conclusion,
-                    comment_count
+                    comment_count, created_at, popular_comments
                 )
             `)
             .eq('constituency_id', constituencyId)
@@ -262,37 +262,65 @@ module.exports = {
             return [];
         }
 
-        // Flatten to match old format (one row per candidate with post info)
-        return (data || []).map(c => {
-            // Because of the inner filter, 'posts' might be empty if no post for that date.
-            // If date is NOT provided, we want the LATEST post.
+        // Return candidates with ALL their posts (sorted by date desc)
+        // Each row is one candidate with a "posts" array containing all their analyses
+        const result = [];
+        for (const c of (data || [])) {
+            // Sort posts by published_date descending
+            const sortedPosts = (c.posts || [])
+                .filter(p => p.id) // Only include posts that have an id
+                .sort((a, b) => new Date(b.published_date || b.created_at) - new Date(a.published_date || a.created_at));
 
-            let post = {};
-            if (c.posts && c.posts.length > 0) {
-                if (date) {
-                    // Filter worked, take the first (and only) one
-                    post = c.posts[0];
-                } else {
-                    // No date filter: find the most recent one manually
-                    post = c.posts.sort((a, b) => new Date(b.published_date) - new Date(a.published_date))[0];
+            // Create one row per post for backward compatibility with existing code
+            if (sortedPosts.length > 0) {
+                for (const post of sortedPosts) {
+                    result.push({
+                        id: c.id,
+                        name: c.name,
+                        party_name: c.party_name,
+                        constituency_id: c.constituency_id,
+                        created_at: c.created_at,
+                        updated_at: c.updated_at,
+                        post_id: post.id,
+                        post_url: post.post_url,
+                        published_date: post.published_date,
+                        positive_percentage: post.positive_percentage || 0,
+                        negative_percentage: post.negative_percentage || 0,
+                        neutral_percentage: post.neutral_percentage || 0,
+                        positive_remarks: post.positive_remarks || '',
+                        negative_remarks: post.negative_remarks || '',
+                        neutral_remarks: post.neutral_remarks || '',
+                        conclusion: post.conclusion || '',
+                        comment_count: post.comment_count || 0,
+                        popular_comments: post.popular_comments || '[]'
+                    });
                 }
+            } else {
+                // Candidate without posts - still include them
+                result.push({
+                    id: c.id,
+                    name: c.name,
+                    party_name: c.party_name,
+                    constituency_id: c.constituency_id,
+                    created_at: c.created_at,
+                    updated_at: c.updated_at,
+                    post_id: null,
+                    post_url: null,
+                    published_date: null,
+                    positive_percentage: 0,
+                    negative_percentage: 0,
+                    neutral_percentage: 0,
+                    positive_remarks: '',
+                    negative_remarks: '',
+                    neutral_remarks: '',
+                    conclusion: '',
+                    comment_count: 0,
+                    popular_comments: '[]'
+                });
             }
+        }
 
-            return {
-                ...c,
-                post_id: post?.id || null,
-                post_url: post?.post_url || null,
-                published_date: post?.published_date || null,
-                positive_percentage: post?.positive_percentage || 0,
-                negative_percentage: post?.negative_percentage || 0,
-                neutral_percentage: post?.neutral_percentage || 0,
-                positive_remarks: post?.positive_remarks || '',
-                negative_remarks: post?.negative_remarks || '',
-                neutral_remarks: post?.neutral_remarks || '',
-                conclusion: post?.conclusion || '',
-                comment_count: post?.comment_count || 0
-            };
-        });
+        return result;
     },
 
     getConstituencyDates: async (constituencyId) => {
@@ -500,7 +528,8 @@ module.exports = {
                 negative_remarks: data.negative_remarks || '',
                 neutral_remarks: data.neutral_remarks || '',
                 conclusion: data.conclusion || '',
-                comment_count: data.comment_count || 0
+                comment_count: data.comment_count || 0,
+                popular_comments: data.popular_comments || '[]'
             })
             .select('id')
             .single();

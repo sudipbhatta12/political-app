@@ -297,8 +297,8 @@ function goHome() {
     resetSelect(elements.constituencySelect, 'Select Constituency');
     elements.constituencySelect.disabled = true;
 
-    // Clear search
-    elements.searchInput.value = '';
+    // Clear search (if search box exists)
+    if (elements.searchInput) elements.searchInput.value = '';
 
     // Reset state
     state.candidates = [];
@@ -714,7 +714,40 @@ function createCandidateCard(candidate, index, isSearchResult) {
     const isViewer = localStorage.getItem('userRole') === 'viewer';
 
     // Build posts list HTML
-    const postsListHtml = hasPosts ? posts.filter(p => p.id).map((post, idx) => `
+    const postsListHtml = hasPosts ? posts.filter(p => p.id).map((post, idx) => {
+        // Parse popular comments
+        let popularComments = [];
+        try {
+            popularComments = typeof post.popular_comments === 'string'
+                ? JSON.parse(post.popular_comments)
+                : (post.popular_comments || []);
+        } catch (e) {
+            popularComments = [];
+        }
+
+        const popularCommentsHtml = popularComments.length > 0 ? `
+            <div class="popular-comments-section" style="margin-top: 12px; padding: 12px; background: rgba(139, 92, 246, 0.1); border-radius: 8px; border: 1px solid rgba(139, 92, 246, 0.2);">
+                <h5 style="margin: 0 0 10px 0; font-size: 0.85rem; color: #a78bfa; display: flex; align-items: center; gap: 6px;">
+                    <span>🔥</span> Popular Comments (${popularComments.length})
+                </h5>
+                <div class="popular-comments-list" style="max-height: 250px; overflow-y: auto;">
+                    ${popularComments.map((c, i) => `
+                        <div class="popular-comment" style="padding: 8px 10px; margin-bottom: 6px; background: rgba(255,255,255,0.05); border-radius: 6px; font-size: 0.8rem; line-height: 1.4;">
+                            <span style="color: rgba(255,255,255,0.5); font-size: 0.7rem;">#${i + 1}</span>
+                            <p style="margin: 4px 0; color: rgba(255,255,255,0.9);">${escapeHtml(c.content.length > 200 ? c.content.substring(0, 200) + '...' : c.content)}</p>
+                            <div style="display: flex; gap: 12px; font-size: 0.7rem; color: rgba(255,255,255,0.5);">
+                                ${c.likes > 0 ? `<span>👍 ${c.likes}</span>` : ''}
+                                ${c.replies > 0 ? `<span>💬 ${c.replies}</span>` : ''}
+                                ${c.shares > 0 ? `<span>🔄 ${c.shares}</span>` : ''}
+                                ${c.engagement_score > 0 ? `<span style="color: #a78bfa;">⚡ ${c.engagement_score}</span>` : ''}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        ` : '';
+
+        return `
         <div class="post-item ${idx === 0 ? 'post-item--active' : ''}" data-post-index="${idx}">
             <div class="post-item__header" data-post-toggle="${idx}">
                 <div class="post-item__info">
@@ -757,6 +790,7 @@ function createCandidateCard(candidate, index, isSearchResult) {
                         View Conclusion
                     </button>
                 ` : ''}
+                ${popularCommentsHtml}
                 ${!isViewer ? `
                 <button class="btn btn--small btn--danger delete-post-btn" data-post-id="${post.id}" style="margin-top: 8px; width: 100%;">
                     🗑️ Delete This Analysis
@@ -764,7 +798,8 @@ function createCandidateCard(candidate, index, isSearchResult) {
                 ` : ''}
             </div>
         </div>
-    `).join('') : '';
+    `;
+    }).join('') : '';
 
     card.innerHTML = `
         <div class="party-card__header">
@@ -1969,24 +2004,27 @@ function initEventListeners() {
         });
     }
 
-    // Hide suggestions when clicking outside
-    document.addEventListener('click', (e) => {
-        if (!elements.searchBox.contains(e.target)) {
-            elements.searchSuggestions.classList.remove('show');
-        }
-    });
+    // Search functionality (only if search box exists)
+    if (elements.searchBox && elements.searchInput && elements.searchSuggestions) {
+        // Hide suggestions when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!elements.searchBox.contains(e.target)) {
+                elements.searchSuggestions.classList.remove('show');
+            }
+        });
 
-    elements.searchInput.addEventListener('input', debounce((e) => {
-        const query = e.target.value;
-        searchCandidates(query);
-    }, 300));
+        elements.searchInput.addEventListener('input', debounce((e) => {
+            const query = e.target.value;
+            searchCandidates(query);
+        }, 300));
 
-    // Show suggestions on focus
-    elements.searchInput.addEventListener('focus', () => {
-        if (elements.searchInput.value.length >= 2) {
-            searchCandidates(elements.searchInput.value);
-        }
-    });
+        // Show suggestions on focus
+        elements.searchInput.addEventListener('focus', () => {
+            if (elements.searchInput.value.length >= 2) {
+                searchCandidates(elements.searchInput.value);
+            }
+        });
+    }
 
     // Add candidate button
     elements.addCandidateBtn.addEventListener('click', () => openCandidateModal());
