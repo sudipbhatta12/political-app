@@ -38,6 +38,10 @@ app.use(express.static(path.join(__dirname, '..', 'public'), { index: false }));
 // Authentication Routes
 // ============================================
 
+// Health check for Cloud Run
+app.get('/health', (req, res) => res.status(200).send('OK'));
+app.get('/_ah/health', (req, res) => res.status(200).send('OK')); // App Engine standard
+
 // Login endpoint
 app.post('/api/login', async (req, res) => {
     const { password } = req.body;
@@ -184,7 +188,8 @@ app.get('/api/candidates', async (req, res) => {
                         positive_remarks: row.positive_remarks,
                         negative_remarks: row.negative_remarks,
                         neutral_remarks: row.neutral_remarks,
-                        conclusion: row.conclusion
+                        conclusion: row.conclusion,
+                        comment_count: row.comment_count
                     });
                 }
             }

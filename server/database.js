@@ -18,7 +18,10 @@ if (!supabaseUrl || !supabaseKey) {
 }
 
 // Create Supabase client
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Create Supabase client (Safe initialization)
+// If keys are missing, we pass empty strings to avoid crash on startup.
+// The app will fail later when trying to query, but it allows the server to bind to port 8080.
+const supabase = createClient(supabaseUrl || 'https://placeholder.supabase.co', supabaseKey || 'placeholder-key');
 
 // Load initial data for seeding
 const provincesData = require('./data/provinces.json');
@@ -151,12 +154,12 @@ async function initSessionTable() {
     // However, if we assume standard access, we might rely on the user running the SQL. 
     // BUT, for this specific task, I'll attempt to implement the logic assuming the table exists 
     // or provide a fallback if the user needs to run SQL.
-    
+
     // Actually, in many agent scenarios, we can't CREATE TABLE easily via the JS client standard API 
     // unless we use a specific rpc or the management API.
     // I will add the methods and assume the table creation is handled or I'll provide the SQL.
     // For "doing the fix", I'll implement the JS logic and update the schema file.
-    
+
     // Ideally, we should check connection.
 }
 
@@ -169,7 +172,7 @@ module.exports = {
         const { error } = await supabase
             .from('sessions')
             .insert({ token });
-        
+
         if (error) {
             console.error('createSession error:', error.message);
             return false;
@@ -193,7 +196,7 @@ module.exports = {
             .from('sessions')
             .delete()
             .eq('token', token);
-        
+
         if (error) console.error('deleteSession error:', error.message);
     },
 
@@ -239,7 +242,8 @@ module.exports = {
                 posts (
                     id, post_url, published_date,
                     positive_percentage, negative_percentage, neutral_percentage,
-                    positive_remarks, negative_remarks, neutral_remarks, conclusion
+                    positive_remarks, negative_remarks, neutral_remarks, conclusion,
+                    comment_count
                 )
             `)
             .eq('constituency_id', constituencyId)
@@ -262,7 +266,7 @@ module.exports = {
         return (data || []).map(c => {
             // Because of the inner filter, 'posts' might be empty if no post for that date.
             // If date is NOT provided, we want the LATEST post.
-            
+
             let post = {};
             if (c.posts && c.posts.length > 0) {
                 if (date) {
@@ -285,7 +289,8 @@ module.exports = {
                 positive_remarks: post?.positive_remarks || '',
                 negative_remarks: post?.negative_remarks || '',
                 neutral_remarks: post?.neutral_remarks || '',
-                conclusion: post?.conclusion || ''
+                conclusion: post?.conclusion || '',
+                comment_count: post?.comment_count || 0
             };
         });
     },
@@ -494,7 +499,8 @@ module.exports = {
                 positive_remarks: data.positive_remarks || '',
                 negative_remarks: data.negative_remarks || '',
                 neutral_remarks: data.neutral_remarks || '',
-                conclusion: data.conclusion || ''
+                conclusion: data.conclusion || '',
+                comment_count: data.comment_count || 0
             })
             .select('id')
             .single();
@@ -518,7 +524,8 @@ module.exports = {
                 positive_remarks: data.positive_remarks,
                 negative_remarks: data.negative_remarks,
                 neutral_remarks: data.neutral_remarks,
-                conclusion: data.conclusion
+                conclusion: data.conclusion,
+                comment_count: data.comment_count
             })
             .eq('id', id);
 
