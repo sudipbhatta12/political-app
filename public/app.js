@@ -930,10 +930,13 @@ function createCandidateCard(candidate, index, isSearchResult) {
     });
 
     // Event listeners - Edit candidate button
-    card.querySelector('.edit-btn').addEventListener('click', (e) => {
-        e.stopPropagation();
-        openCandidateModal(candidate, posts[0] || {});
-    });
+    const editBtn = card.querySelector('.edit-btn');
+    if (editBtn) {
+        editBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openCandidateModal(candidate, posts[0] || {});
+        });
+    }
 
     // Delete individual post buttons
     card.querySelectorAll('.delete-post-btn').forEach(btn => {
@@ -2196,7 +2199,18 @@ function initEventListeners() {
 // ============================================
 async function loadRecentConstituencies() {
     try {
-        const constituencies = await API.get('/recent-constituencies');
+        // User requested customization: Static list of locations
+        // Note: Sarlahi 6 requested but DB only has up to 4. Using Sarlahi 4.
+        const staticConstituencies = [
+            { constituency_id: 171, province_id: 1, district_id: 4, district_name: "Jhapa", constituency_name: "Constituency No. 5" },
+            { constituency_id: 228, province_id: 3, district_id: 30, district_name: "Kathmandu", constituency_name: "Constituency No. 9" },
+            { constituency_id: 255, province_id: 3, district_id: 35, district_name: "Chitwan", constituency_name: "Constituency No. 3" },
+            { constituency_id: 254, province_id: 3, district_id: 35, district_name: "Chitwan", constituency_name: "Constituency No. 2" },
+            { constituency_id: 253, province_id: 3, district_id: 35, district_name: "Chitwan", constituency_name: "Constituency No. 1" },
+            { constituency_id: 214, province_id: 2, district_id: 19, district_name: "Sarlahi", constituency_name: "Constituency No. 4" }
+        ];
+
+        const constituencies = staticConstituencies;
 
         if (constituencies && constituencies.length > 0) {
             elements.recentTags.innerHTML = constituencies.map(c => {
