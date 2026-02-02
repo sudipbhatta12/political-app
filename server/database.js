@@ -243,7 +243,7 @@ module.exports = {
                     id, post_url, published_date,
                     positive_percentage, negative_percentage, neutral_percentage,
                     positive_remarks, negative_remarks, neutral_remarks, conclusion,
-                    comment_count, created_at
+                    comment_count, created_at, popular_comments
                 )
             `)
             .eq('constituency_id', constituencyId)
@@ -291,7 +291,8 @@ module.exports = {
                         negative_remarks: post.negative_remarks || '',
                         neutral_remarks: post.neutral_remarks || '',
                         conclusion: post.conclusion || '',
-                        comment_count: post.comment_count || 0
+                        comment_count: post.comment_count || 0,
+                        popular_comments: post.popular_comments || '[]'
                     });
                 }
             } else {
@@ -313,7 +314,8 @@ module.exports = {
                     negative_remarks: '',
                     neutral_remarks: '',
                     conclusion: '',
-                    comment_count: 0
+                    comment_count: 0,
+                    popular_comments: '[]'
                 });
             }
         }
@@ -526,7 +528,8 @@ module.exports = {
                 negative_remarks: data.negative_remarks || '',
                 neutral_remarks: data.neutral_remarks || '',
                 conclusion: data.conclusion || '',
-                comment_count: data.comment_count || 0
+                comment_count: data.comment_count || 0,
+                popular_comments: data.popular_comments || '[]'
             })
             .select('id')
             .single();

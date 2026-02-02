@@ -14,11 +14,12 @@ if (!apiKey) {
 const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
 // Helper: Extract text from different file types
-// Returns { text: string, count: number } for tracking comment counts
+// Returns { text: string, count: number, structuredComments: array } for tracking comment counts and engagement
 async function extractTextFromFile(file) {
     const buffer = fs.readFileSync(file.path);
     const mimeType = file.mimetype;
     let comments = [];
+    let structuredComments = []; // For engagement data
 
     try {
         if (mimeType === 'application/pdf') {
@@ -31,13 +32,103 @@ async function extractTextFromFile(file) {
             const workbook = XLSX.read(buffer, { type: 'buffer' });
             const sheetName = workbook.SheetNames[0];
             const sheet = workbook.Sheets[sheetName];
-            const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-            // Flatten and filter
-            comments = jsonData.flat().map(c => String(c)).filter(c => c.trim().length > 5);
+
+            // Try to parse as structured data with headers first
+            const jsonDataWithHeaders = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+            if (jsonDataWithHeaders.length > 1) {
+                // Check if first row looks like headers
+                const headers = jsonDataWithHeaders[0].map(h => String(h || '').toLowerCase().trim());
+
+                // Look for common column names for comments and engagement
+                const commentIdx = headers.findIndex(h =>
+                    h.includes('comment') || h.includes('text') || h.includes('message') || h.includes('content')
+                );
+                const likesIdx = headers.findIndex(h =>
+                    h.includes('like') || h.includes('reaction') || h.includes('love')
+                );
+                const repliesIdx = headers.findIndex(h =>
+                    h.includes('repl') || h.includes('response')
+                );
+                const sharesIdx = headers.findIndex(h =>
+                    h.includes('share')
+                );
+
+                // If we found a comment column, extract structured data
+                if (commentIdx !== -1) {
+                    for (let i = 1; i < jsonDataWithHeaders.length; i++) {
+                        const row = jsonDataWithHeaders[i];
+                        const commentText = String(row[commentIdx] || '').trim();
+
+                        if (commentText.length > 5) {
+                            const likes = likesIdx !== -1 ? parseInt(row[likesIdx]) || 0 : 0;
+                            const replies = repliesIdx !== -1 ? parseInt(row[repliesIdx]) || 0 : 0;
+                            const shares = sharesIdx !== -1 ? parseInt(row[sharesIdx]) || 0 : 0;
+
+                            // Calculate engagement score
+                            const engagementScore = likes + (replies * 2) + (shares * 3);
+
+                            structuredComments.push({
+                                content: commentText,
+                                likes,
+                                replies,
+                                shares,
+                                engagement_score: engagementScore
+                            });
+
+                            comments.push(commentText);
+                        }
+                    }
+                } else {
+                    // No headers found, flatten all cells
+                    comments = jsonDataWithHeaders.flat().map(c => String(c)).filter(c => c.trim().length > 5);
+                }
+            }
         }
         else if (mimeType === 'text/csv' || mimeType === 'application/csv') {
-            const records = parse(buffer, { columns: false, skip_empty_lines: true });
-            comments = records.flat().map(c => String(c)).filter(c => c.trim().length > 5);
+            const records = parse(buffer, { columns: true, skip_empty_lines: true });
+
+            // Try to find comment and engagement columns
+            if (records.length > 0) {
+                const headers = Object.keys(records[0]).map(h => h.toLowerCase().trim());
+
+                const commentKey = Object.keys(records[0]).find(k => {
+                    const lk = k.toLowerCase();
+                    return lk.includes('comment') || lk.includes('text') || lk.includes('message') || lk.includes('content');
+                });
+                const likesKey = Object.keys(records[0]).find(k => {
+                    const lk = k.toLowerCase();
+                    return lk.includes('like') || lk.includes('reaction');
+                });
+                const repliesKey = Object.keys(records[0]).find(k => {
+                    const lk = k.toLowerCase();
+                    return lk.includes('repl') || lk.includes('response');
+                });
+
+                if (commentKey) {
+                    for (const row of records) {
+                        const commentText = String(row[commentKey] || '').trim();
+                        if (commentText.length > 5) {
+                            const likes = likesKey ? parseInt(row[likesKey]) || 0 : 0;
+                            const replies = repliesKey ? parseInt(row[repliesKey]) || 0 : 0;
+                            const engagementScore = likes + (replies * 2);
+
+                            structuredComments.push({
+                                content: commentText,
+                                likes,
+                                replies,
+                                shares: 0,
+                                engagement_score: engagementScore
+                            });
+
+                            comments.push(commentText);
+                        }
+                    }
+                } else {
+                    // Flatten all values
+                    comments = records.flatMap(r => Object.values(r)).map(c => String(c)).filter(c => c.trim().length > 5);
+                }
+            }
         }
         else {
             throw new Error('Unsupported file type');
@@ -51,7 +142,8 @@ async function extractTextFromFile(file) {
 
         return {
             text: limitedComments.join('\n'),
-            count: totalCount
+            count: totalCount,
+            structuredComments: structuredComments
         };
     } catch (error) {
         console.error('Text extraction error:', error);
@@ -75,6 +167,7 @@ async function analyzeComments(req, res) {
 
         let allComments = [];
         let totalCommentCount = 0;
+        let allStructuredComments = []; // Collect all structured comments
 
         for (const file of req.files) {
             console.log(`   - Reading: ${file.originalname}`);
@@ -83,9 +176,14 @@ async function analyzeComments(req, res) {
                 allComments.push(result.text);
                 totalCommentCount += result.count;
             }
+            // Collect structured comments for engagement ranking
+            if (result.structuredComments && result.structuredComments.length > 0) {
+                allStructuredComments = allStructuredComments.concat(result.structuredComments);
+            }
         }
 
         console.log(`📊 Total comments extracted: ${totalCommentCount}`);
+        console.log(`📊 Structured comments with engagement: ${allStructuredComments.length}`);
 
         const commentsText = allComments.join('\n');
 
@@ -147,7 +245,17 @@ async function analyzeComments(req, res) {
 
         console.log('✅ Analysis complete:', analysis);
 
-        // 3. Save to Database
+        // 3. Get Top 10 Popular Comments by engagement
+        let popularComments = [];
+        if (allStructuredComments.length > 0) {
+            // Sort by engagement score (descending)
+            popularComments = allStructuredComments
+                .sort((a, b) => b.engagement_score - a.engagement_score)
+                .slice(0, 10);
+            console.log(`🌟 Top 10 popular comments identified`);
+        }
+
+        // 4. Save to Database
         // Check if candidate already has an analysis for this exact source URL
         const sourceUrl = req.body.source_url;
         const existingPosts = await db.getPostsByCandidate(parseInt(candidate_id));
@@ -186,6 +294,7 @@ async function analyzeComments(req, res) {
             post_url: postUrl,
             published_date: today,
             comment_count: totalCommentCount,
+            popular_comments: JSON.stringify(popularComments),
             ...analysis
         });
         console.log(`✨ Created new post ID: ${postId} for candidate ${candidate_id}`);
@@ -201,7 +310,8 @@ async function analyzeComments(req, res) {
             success: true,
             message: 'Analysis completed and saved successfully',
             data: analysis,
-            commentCount: totalCommentCount
+            commentCount: totalCommentCount,
+            popularComments: popularComments
         });
 
     } catch (error) {

@@ -46,6 +46,8 @@ CREATE TABLE IF NOT EXISTS posts (
     negative_remarks TEXT,
     neutral_remarks TEXT,
     conclusion TEXT,
+    comment_count INTEGER DEFAULT 0,
+    popular_comments TEXT DEFAULT '[]',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
