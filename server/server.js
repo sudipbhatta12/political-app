@@ -144,7 +144,8 @@ app.get('/api/recent-constituencies', async (req, res) => {
         const constituencies = await db.getRecentConstituencies();
         res.json(constituencies);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error("Database error in /recent-constituencies (Offline Fallback):", error.message);
+        res.json([]); // Return empty array to prevent crash
     }
 });
 
@@ -219,7 +220,56 @@ app.get('/api/candidates', async (req, res) => {
 
         res.json([]);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error("Database error in /candidates (Offline Fallback):", error.message);
+
+        // Mock Data for Offline Mode
+        const mockCandidates = [
+            {
+                id: 101,
+                name: "Ravi Lamichhane (Demo)",
+                party_name: "RSP",
+                constituency_id: Number(req.query.constituency_id) || 1,
+                posts: [
+                    {
+                        id: 1,
+                        published_date: new Date().toISOString(),
+                        positive_percentage: 65,
+                        negative_percentage: 15,
+                        neutral_percentage: 20,
+                        comment_count: 154,
+                        post_url: "https://facebook.com/demo1",
+                        positive_remarks: "Strong support for new policies",
+                        negative_remarks: "Concerns about implementation speed",
+                        neutral_remarks: "Waiting to see results",
+                        conclusion: "Overall sentiment remains highly positive due to recent announcements.",
+                        popular_comments: JSON.stringify([{ content: "Great job!", likes: 10 }, { content: "Keep it up", likes: 5 }])
+                    }
+                ]
+            },
+            {
+                id: 102,
+                name: "Gagan Thapa (Demo)",
+                party_name: "Nepali Congress",
+                constituency_id: Number(req.query.constituency_id) || 1,
+                posts: [
+                    {
+                        id: 2,
+                        published_date: new Date().toISOString(),
+                        positive_percentage: 45,
+                        negative_percentage: 35,
+                        neutral_percentage: 20,
+                        comment_count: 89,
+                        post_url: "https://facebook.com/demo2",
+                        positive_remarks: "Appreciated verification tour",
+                        negative_remarks: "Criticism on delay",
+                        conclusion: "Mixed reactions from the recent town hall.",
+                        popular_comments: JSON.stringify([])
+                    }
+                ]
+            }
+        ];
+
+        res.json(mockCandidates);
     }
 });
 
@@ -253,7 +303,26 @@ app.get('/api/library', async (req, res) => {
 
         res.json(result);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error("Database error in /library (Offline Fallback):", error.message);
+
+        // Mock Data for Library
+        const mockLibrary = [
+            {
+                id: 101,
+                name: "Ravi Lamichhane (Demo)",
+                party_name: "RSP",
+                constituency_name: "Chitwan 2",
+                post: {
+                    id: 1,
+                    published_date: new Date().toISOString(),
+                    positive_percentage: 65,
+                    negative_percentage: 15,
+                    neutral_percentage: 20,
+                    conclusion: "Strong support observed."
+                }
+            }
+        ];
+        res.json(mockLibrary);
     }
 });
 
