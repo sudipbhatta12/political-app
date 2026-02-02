@@ -240,8 +240,8 @@ function goHome() {
     resetSelect(elements.constituencySelect, 'Select Constituency');
     elements.constituencySelect.disabled = true;
 
-    // Clear search
-    elements.searchInput.value = '';
+    // Clear search (if search box exists)
+    if (elements.searchInput) elements.searchInput.value = '';
 
     // Reset state
     state.candidates = [];
@@ -1902,24 +1902,27 @@ function initEventListeners() {
         });
     }
 
-    // Hide suggestions when clicking outside
-    document.addEventListener('click', (e) => {
-        if (!elements.searchBox.contains(e.target)) {
-            elements.searchSuggestions.classList.remove('show');
-        }
-    });
+    // Search functionality (only if search box exists)
+    if (elements.searchBox && elements.searchInput && elements.searchSuggestions) {
+        // Hide suggestions when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!elements.searchBox.contains(e.target)) {
+                elements.searchSuggestions.classList.remove('show');
+            }
+        });
 
-    elements.searchInput.addEventListener('input', debounce((e) => {
-        const query = e.target.value;
-        searchCandidates(query);
-    }, 300));
+        elements.searchInput.addEventListener('input', debounce((e) => {
+            const query = e.target.value;
+            searchCandidates(query);
+        }, 300));
 
-    // Show suggestions on focus
-    elements.searchInput.addEventListener('focus', () => {
-        if (elements.searchInput.value.length >= 2) {
-            searchCandidates(elements.searchInput.value);
-        }
-    });
+        // Show suggestions on focus
+        elements.searchInput.addEventListener('focus', () => {
+            if (elements.searchInput.value.length >= 2) {
+                searchCandidates(elements.searchInput.value);
+            }
+        });
+    }
 
     // Add candidate button
     elements.addCandidateBtn.addEventListener('click', () => openCandidateModal());
