@@ -760,7 +760,7 @@ function createCandidateCard(candidate, index, isSearchResult) {
         const popularCommentsHtml = popularComments.length > 0 ? `
             <div class="popular-comments-section" style="margin-top: 12px; padding: 12px; background: rgba(139, 92, 246, 0.1); border-radius: 8px; border: 1px solid rgba(139, 92, 246, 0.2);">
                 <h5 style="margin: 0 0 10px 0; font-size: 0.85rem; color: #a78bfa; display: flex; align-items: center; gap: 6px;">
-                    <span>🔥</span> Popular Comments (${popularComments.length})
+                    <i data-lucide="flame" style="width: 14px; height: 14px; color: #f97316;"></i> Popular Comments (${popularComments.length})
                 </h5>
                 <div class="popular-comments-list" style="max-height: 250px; overflow-y: auto;">
                     ${popularComments.map((c, i) => `
@@ -768,10 +768,10 @@ function createCandidateCard(candidate, index, isSearchResult) {
                             <span style="color: rgba(255,255,255,0.5); font-size: 0.7rem;">#${i + 1}</span>
                             <p style="margin: 4px 0; color: rgba(255,255,255,0.9);">${escapeHtml(c.content.length > 200 ? c.content.substring(0, 200) + '...' : c.content)}</p>
                             <div style="display: flex; gap: 12px; font-size: 0.7rem; color: rgba(255,255,255,0.5);">
-                                ${c.likes > 0 ? `<span>👍 ${c.likes}</span>` : ''}
-                                ${c.replies > 0 ? `<span>💬 ${c.replies}</span>` : ''}
-                                ${c.shares > 0 ? `<span>🔄 ${c.shares}</span>` : ''}
-                                ${c.engagement_score > 0 ? `<span style="color: #a78bfa;">⚡ ${c.engagement_score}</span>` : ''}
+                                ${c.likes > 0 ? `<span><i data-lucide="thumbs-up" style="width: 12px; height: 12px;"></i> ${c.likes}</span>` : ''}
+                                ${c.replies > 0 ? `<span><i data-lucide="message-circle" style="width: 12px; height: 12px;"></i> ${c.replies}</span>` : ''}
+                                ${c.shares > 0 ? `<span><i data-lucide="repeat" style="width: 12px; height: 12px;"></i> ${c.shares}</span>` : ''}
+                                ${c.engagement_score > 0 ? `<span style="color: #a78bfa;"><i data-lucide="zap" style="width: 12px; height: 12px;"></i> ${c.engagement_score}</span>` : ''}
                             </div>
                         </div>
                     `).join('')}
@@ -784,8 +784,8 @@ function createCandidateCard(candidate, index, isSearchResult) {
             <div class="post-item__header" data-post-toggle="${idx}">
                 <div class="post-item__info">
                     <span class="post-item__number">#${idx + 1}</span>
-                    <span class="post-item__date">📅 ${post.published_date ? formatDate(post.published_date) : 'No date'}</span>
-                    ${post.comment_count ? `<span class="post-item__comments">💬 ${post.comment_count.toLocaleString()}</span>` : ''}
+                    <span class="post-item__date"><i data-lucide="calendar" style="width: 12px; height: 12px;"></i> ${post.published_date ? formatDate(post.published_date) : 'No date'}</span>
+                    ${post.comment_count ? `<span class="post-item__comments"><i data-lucide="message-square" style="width: 12px; height: 12px;"></i> ${post.comment_count.toLocaleString()}</span>` : ''}
                 </div>
                 <div class="post-item__sentiment-preview">
                     <span class="text-positive">+${post.positive_percentage || 0}%</span>
@@ -799,7 +799,7 @@ function createCandidateCard(candidate, index, isSearchResult) {
             <div class="post-item__content ${idx === 0 ? 'post-item__content--expanded' : ''}" data-post-content="${idx}">
                 ${post.post_url && post.post_url.startsWith('http') ? `
                     <div class="post-item__source">
-                        🔗 <a href="#" class="view-source-link" data-url="${escapeHtml(post.post_url)}" style="color: var(--accent-primary);">
+                        <i data-lucide="link" style="width: 12px; height: 12px;"></i> <a href="#" class="view-source-link" data-url="${escapeHtml(post.post_url)}" style="color: var(--accent-primary);">
                             ${(() => { try { return new URL(post.post_url).hostname; } catch (e) { return 'View Source'; } })()}
                         </a>
                     </div>
@@ -825,7 +825,7 @@ function createCandidateCard(candidate, index, isSearchResult) {
                 ${popularCommentsHtml}
                 ${!isViewer ? `
                 <button class="btn btn--small btn--danger delete-post-btn" data-post-id="${post.id}" style="margin-top: 8px; width: 100%;">
-                    🗑️ Delete This Analysis
+                    <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i> Delete This Analysis
                 </button>
                 ` : ''}
             </div>
@@ -837,7 +837,7 @@ function createCandidateCard(candidate, index, isSearchResult) {
         <div class="party-card__header">
             <span class="party-card__party-name">${escapeHtml(candidate.party_name)}</span>
             <div class="party-card__actions-top">
-                ${!isViewer ? `<button class="btn btn--icon btn--secondary edit-btn" title="Edit Candidate">✏️</button>` : ''}
+                ${!isViewer ? `<button class="btn btn--icon btn--secondary edit-btn" title="Edit Candidate"><i data-lucide="pencil" style="width: 14px; height: 14px;"></i></button>` : ''}
             </div>
         </div>
         <h3 class="party-card__candidate-name">${escapeHtml(candidate.name)}</h3>
@@ -880,7 +880,7 @@ function createCandidateCard(candidate, index, isSearchResult) {
         ${hasPosts ? `
             <div class="posts-list">
                 <div class="posts-list__header">
-                    <h4>📊 Analyzed Posts</h4>
+                    <h4><i data-lucide="bar-chart-3" style="width: 16px; height: 16px;"></i> Analyzed Posts</h4>
                 </div>
                 ${postsListHtml}
             </div>
