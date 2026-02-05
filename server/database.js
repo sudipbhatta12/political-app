@@ -635,7 +635,8 @@ module.exports = {
                 posts (
                     positive_percentage,
                     negative_percentage,
-                    neutral_percentage
+                    neutral_percentage,
+                    comment_count
                 )
             `)
             .eq('constituency_id', constituencyId);
@@ -645,21 +646,56 @@ module.exports = {
             return [];
         }
 
-        // Calculate averages
+        // Calculate VOLUME-WEIGHTED averages (posts with more comments have more influence)
         return (data || []).map(c => {
             const posts = c.posts || [];
             const postCount = posts.length;
-            const avgPositive = postCount > 0 ? posts.reduce((s, p) => s + (p.positive_percentage || 0), 0) / postCount : 0;
-            const avgNegative = postCount > 0 ? posts.reduce((s, p) => s + (p.negative_percentage || 0), 0) / postCount : 0;
-            const avgNeutral = postCount > 0 ? posts.reduce((s, p) => s + (p.neutral_percentage || 0), 0) / postCount : 0;
+
+            // Total comments across all posts for this candidate
+            const totalComments = posts.reduce((sum, p) => sum + (p.comment_count || 0), 0);
+
+            if (totalComments === 0 || postCount === 0) {
+                // Fallback to simple average if no comment counts
+                const avgPositive = postCount > 0 ? posts.reduce((s, p) => s + (p.positive_percentage || 0), 0) / postCount : 0;
+                const avgNegative = postCount > 0 ? posts.reduce((s, p) => s + (p.negative_percentage || 0), 0) / postCount : 0;
+                const avgNeutral = postCount > 0 ? posts.reduce((s, p) => s + (p.neutral_percentage || 0), 0) / postCount : 0;
+
+                return {
+                    party_name: c.party_name,
+                    candidate_name: c.name,
+                    avg_positive: avgPositive,
+                    avg_negative: avgNegative,
+                    avg_neutral: avgNeutral,
+                    post_count: postCount,
+                    total_comments: 0
+                };
+            }
+
+            // Volume-weighted calculation: (percentage * comment_count) / total_comments
+            // This gives more weight to posts with more comments
+            const weightedPositive = posts.reduce((sum, p) => {
+                const weight = (p.comment_count || 0) / totalComments;
+                return sum + ((p.positive_percentage || 0) * weight);
+            }, 0);
+
+            const weightedNegative = posts.reduce((sum, p) => {
+                const weight = (p.comment_count || 0) / totalComments;
+                return sum + ((p.negative_percentage || 0) * weight);
+            }, 0);
+
+            const weightedNeutral = posts.reduce((sum, p) => {
+                const weight = (p.comment_count || 0) / totalComments;
+                return sum + ((p.neutral_percentage || 0) * weight);
+            }, 0);
 
             return {
                 party_name: c.party_name,
                 candidate_name: c.name,
-                avg_positive: avgPositive,
-                avg_negative: avgNegative,
-                avg_neutral: avgNeutral,
-                post_count: postCount
+                avg_positive: weightedPositive,
+                avg_negative: weightedNegative,
+                avg_neutral: weightedNeutral,
+                post_count: postCount,
+                total_comments: totalComments
             };
         });
     },
