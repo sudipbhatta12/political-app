@@ -4,6 +4,8 @@ const pdf = require('pdf-parse');
 const XLSX = require('xlsx');
 const { parse } = require('csv-parse/sync');
 const db = require('./database');
+const newsMediaLib = require('./libraries/news-media');
+const partiesLib = require('./libraries/political-parties');
 
 // Initialize Gemini
 // CRITICAL: Key must be provided via environment variable GEMINI_API_KEY
@@ -157,13 +159,24 @@ async function analyzeComments(req, res) {
             return res.status(400).json({ error: 'No files uploaded' });
         }
 
-        const { candidate_id } = req.body;
-        if (!candidate_id) {
-            return res.status(400).json({ error: 'Candidate ID is required' });
+        const sourceType = req.body.source_type || 'candidate'; // Default to candidate for backward compatibility
+        let sourceId;
+
+        if (sourceType === 'candidate') {
+            sourceId = req.body.candidate_id;
+            if (!sourceId) return res.status(400).json({ error: 'Candidate ID is required' });
+        } else if (sourceType === 'news_media') {
+            sourceId = req.body.news_media_id;
+            if (!sourceId) return res.status(400).json({ error: 'News Media ID is required' });
+        } else if (sourceType === 'political_party') {
+            sourceId = req.body.political_party_id;
+            if (!sourceId) return res.status(400).json({ error: 'Political Party ID is required' });
+        } else {
+            return res.status(400).json({ error: 'Invalid source type' });
         }
 
         // 1. Extract Text from ALL files
-        console.log(`📂 Processing ${req.files.length} file(s)...`);
+        console.log(`📂 Processing ${req.files.length} file(s) for ${sourceType} ID: ${sourceId}...`);
 
         let allComments = [];
         let totalCommentCount = 0;
@@ -196,7 +209,7 @@ async function analyzeComments(req, res) {
         const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
         const prompt = `
-            You are a political analyst expert. Analyze the following list of public comments regarding a political candidate.
+            You are a political analyst expert. Analyze the following list of public comments regarding a political entity (candidate, party, or news).
             
             Determine the overall sentiment distribution (Positive, Negative, Neutral) as percentages.
             Summarize the key "Positive Remarks" (why people like them), "Negative Remarks" (why people dislike them), and "Neutral Remarks".
@@ -256,48 +269,58 @@ async function analyzeComments(req, res) {
         }
 
         // 4. Save to Database
-        // Check if candidate already has an analysis for this exact source URL
-        const sourceUrl = req.body.source_url;
-        const existingPosts = await db.getPostsByCandidate(parseInt(candidate_id));
-
-        // Check for duplicate URL (if source URL was provided)
-        if (sourceUrl) {
-            const duplicatePost = existingPosts.find(p => p.post_url === sourceUrl);
-            if (duplicatePost && !req.body.force_reanalyze) {
-                // Return warning about duplicate - let frontend ask user
-                return res.status(409).json({
-                    error: 'duplicate_url',
-                    message: 'This post URL has already been analyzed for this candidate.',
-                    existingPostId: duplicatePost.id,
-                    existingDate: duplicatePost.published_date,
-                    askConfirmation: true
-                });
-            }
-
-            // If force_reanalyze is true, delete the old post first
-            if (duplicatePost && req.body.force_reanalyze) {
-                await db.deletePost(duplicatePost.id);
-                console.log(`🗑️ Deleted existing post ID: ${duplicatePost.id} for re-analysis`);
-            }
-        }
-
-        let postId = 0;
-        const fileNames = req.files.map(f => f.originalname).join(', ');
-        const today = new Date().toISOString().split('T')[0];
-
-        // Use the source URL if provided, otherwise use a descriptive text
-        const postUrl = sourceUrl || `AI Analysis - ${req.files.length} file(s) - ${today}`;
-
-        // Always create a new post (allows multiple posts per candidate)
-        postId = await db.createPost({
-            candidate_id: parseInt(candidate_id),
-            post_url: postUrl,
-            published_date: today,
+        let postData = {
+            post_url: req.body.source_url || `AI Analysis - ${req.files.length} file(s) - ${new Date().toISOString().split('T')[0]}`,
+            published_date: new Date().toISOString().split('T')[0],
             comment_count: totalCommentCount,
             popular_comments: JSON.stringify(popularComments),
             ...analysis
-        });
-        console.log(`✨ Created new post ID: ${postId} for candidate ${candidate_id}`);
+        };
+
+        let postId = 0;
+
+        if (sourceType === 'candidate') {
+            // Check duplicate check for candidate
+            const existingPosts = await db.getPostsByCandidate(parseInt(sourceId));
+            if (req.body.source_url) {
+                const duplicatePost = existingPosts.find(p => p.post_url === req.body.source_url);
+                if (duplicatePost && !req.body.force_reanalyze) {
+                    return res.status(409).json({
+                        error: 'duplicate_url',
+                        message: 'This post URL has already been analyzed for this candidate.',
+                        existingPostId: duplicatePost.id,
+                        existingDate: duplicatePost.published_date,
+                        askConfirmation: true
+                    });
+                }
+                if (duplicatePost && req.body.force_reanalyze) {
+                    await db.deletePost(duplicatePost.id);
+                }
+            }
+
+            postData.candidate_id = parseInt(sourceId);
+            postId = await db.createPost(postData);
+
+        } else if (sourceType === 'news_media') {
+            // Logic for News Media
+            // Note: Duplicate check logic can be added here similar to candidate if needed
+            // For now, simpler implementation
+            postId = await newsMediaLib.createNewsMediaPost(parseInt(sourceId), {
+                ...postData,
+                title: 'AI Analysis',
+                content_summary: postData.conclusion // Map conclusion to summary
+            });
+
+        } else if (sourceType === 'political_party') {
+            // Logic for Political Party
+            postId = await partiesLib.createPartyPost(parseInt(sourceId), {
+                ...postData,
+                title: 'AI Analysis',
+                content_summary: postData.conclusion
+            });
+        }
+
+        console.log(`✨ Created new post ID: ${postId} for ${sourceType} ${sourceId}`);
 
         // Cleanup uploaded files
         for (const file of req.files) {

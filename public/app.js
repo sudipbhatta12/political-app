@@ -180,6 +180,12 @@ const elements = {
     aiSubmitBtn: document.getElementById('aiSubmitBtn'),
     aiLoading: document.getElementById('aiLoading'),
     aiSourceUrl: document.getElementById('aiSourceUrl'),
+    aiSourceType: document.getElementById('aiSourceType'),
+    aiCandidateSection: document.getElementById('aiCandidateSection'),
+    aiNewsSection: document.getElementById('aiNewsSection'),
+    aiPartySection: document.getElementById('aiPartySection'),
+    aiNewsSelect: document.getElementById('aiNewsSelect'),
+    aiPartySelect: document.getElementById('aiPartySelect'),
 
     // Timeline
     timelineSection: document.getElementById('timelineSection'),
@@ -261,10 +267,11 @@ function showToast(message, type = 'info') {
     const toast = document.createElement('div');
     toast.className = `toast toast--${type}`;
     toast.innerHTML = `
-        <span>${type === 'success' ? '✓' : type === 'error' ? '✗' : 'ℹ'}</span>
+        <span>${type === 'success' ? '<i data-lucide="check-circle" style="width: 18px; height: 18px;"></i>' : type === 'error' ? '<i data-lucide="alert-circle" style="width: 18px; height: 18px;"></i>' : '<i data-lucide="info" style="width: 18px; height: 18px;"></i>'}</span>
         <span>${message}</span>
     `;
     elements.toastContainer.appendChild(toast);
+    lucide.createIcons({ root: toast }); // Initialize icons for the new element
 
     setTimeout(() => {
         toast.style.animation = 'slideIn 0.3s ease reverse';
@@ -390,7 +397,7 @@ async function loadDistricts(provinceId, targetSelect, districtSelect, constitue
     }
 
     try {
-        const districts = await API.get(`/districts/${provinceId}`);
+        const districts = await API.get(`/ districts / ${provinceId} `);
         populateSelect(districtSelect, districts, 'name_en');
         districtSelect.disabled = false;
         resetSelect(constituencySelect, 'Select Constituency');
@@ -408,7 +415,7 @@ async function loadConstituencies(districtId, constituencySelect) {
     }
 
     try {
-        const constituencies = await API.get(`/constituencies/${districtId}`);
+        const constituencies = await API.get(`/ constituencies / ${districtId} `);
         populateSelect(constituencySelect, constituencies, 'name');
         constituencySelect.disabled = false;
     } catch (error) {
@@ -428,7 +435,7 @@ function populateSelect(select, items, labelKey) {
     } else if (select.id.toLowerCase().includes('constituency')) {
         placeholder = 'Constituency';
     }
-    select.innerHTML = `<option value="">Select ${placeholder}</option>`;
+    select.innerHTML = `< option value = "" > Select ${placeholder}</option > `;
 
     // Sort items - use natural numeric sorting for constituencies
     const sortedItems = [...items].sort((a, b) => {
@@ -455,7 +462,7 @@ function populateSelect(select, items, labelKey) {
 }
 
 function resetSelect(select, placeholder) {
-    select.innerHTML = `<option value="">${placeholder}</option>`;
+    select.innerHTML = `< option value = "" > ${placeholder}</option > `;
     select.disabled = true;
 }
 
@@ -497,7 +504,7 @@ function populateCandidateSelector(candidates) {
 
         const option = document.createElement('option');
         option.value = candidate.id;
-        option.textContent = `  ${candidate.name}`;
+        option.textContent = `  ${candidate.name} `;
         option.dataset.name = candidate.name;
         option.dataset.party = candidate.party_name;
         elements.candidateSelect.appendChild(option);
@@ -535,8 +542,8 @@ async function loadCandidatesByConstituency(constituencyId, date = null, filterB
 
     try {
         const query = dateToFetch
-            ? `/candidates?constituency_id=${constituencyId}&date=${dateToFetch}`
-            : `/candidates?constituency_id=${constituencyId}`;
+            ? `/ candidates ? constituency_id = ${constituencyId}& date=${dateToFetch} `
+            : `/ candidates ? constituency_id = ${constituencyId} `;
 
         state.candidates = await API.get(query);
         renderCandidateCards();
@@ -550,7 +557,7 @@ async function loadCandidatesByConstituency(constituencyId, date = null, filterB
 
 async function loadConstituencyDates(constituencyId) {
     try {
-        const dates = await API.get(`/constituency/${constituencyId}/dates`);
+        const dates = await API.get(`/ constituency / ${constituencyId}/dates`);
         state.availableDates = dates;
         state.currentDateIndex = 0; // Reset to newest
 
@@ -1557,42 +1564,16 @@ function closeRemarksModal() {
 // Library Functions
 // ============================================
 let libraryData = [];
+let libraryNewsData = [];
+let libraryPartiesData = [];
 
 async function openLibrary() {
-    try {
-        // Fetch all candidates with posts
-        const candidates = await API.get('/library');
-        // Sort by date descending (Newest first)
-        libraryData = candidates
-            .filter(c => c.post)
-            .sort((a, b) => new Date(b.post.published_date || 0) - new Date(a.post.published_date || 0));
+    // Open Modal
+    elements.libraryModal.classList.add('active');
 
-        if (libraryData.length === 0) {
-            elements.libraryTableBody.innerHTML = '';
-            elements.libraryEmpty.style.display = 'flex';
-            document.getElementById('libraryTable').style.display = 'none';
-            elements.libraryCount.textContent = '0 records';
-        } else {
-            elements.libraryEmpty.style.display = 'none';
-            document.getElementById('libraryTable').style.display = 'table';
-
-            // Initialize/Reset Filter
-            if (elements.libraryDateFilter) {
-                elements.libraryDateFilter.value = '';
-                // Remove old listener if any (simplest way is to clone or just re-attach carefully, 
-                // but since openLibrary is called multiple times, let's attach listener ONCE in initEventListeners 
-                // OR handle filtering here. Better: attach once in initEventListeners.)
-                // Actually, let's just make sure renderLibraryTable uses the filter if value exists.
-            }
-            renderLibraryTable();
-        }
-
-        elements.libraryModal.classList.add('active');
-        lucide.createIcons();
-    } catch (error) {
-        console.error('Failed to load library:', error);
-        showToast('Failed to load library data', 'error');
-    }
+    // Load default tab (Candidates)
+    loadCandidatesLibrary();
+    lucide.createIcons();
 }
 
 function closeLibrary() {
@@ -2111,6 +2092,57 @@ function initEventListeners() {
         if (e.target === elements.aiModal) closeAIModal();
     });
 
+    // AI Source Type Toggle
+    // Segmented Control Logic for AI Source Type
+    const segmentButtons = document.querySelectorAll('.segment-btn');
+    segmentButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            // 1. Visual Update
+            segmentButtons.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            // 2. Data Update
+            const type = btn.dataset.value;
+            if (elements.aiSourceType) elements.aiSourceType.value = type;
+
+            // 3. Trigger Logic
+            handleAnalysisTypeChange(type);
+        });
+    });
+
+    function handleAnalysisTypeChange(type) {
+        const candidateSec = elements.aiCandidateSection;
+        const newsSec = elements.aiNewsSection;
+        const partySec = elements.aiPartySection;
+
+        candidateSec.style.display = 'none';
+        newsSec.style.display = 'none';
+        partySec.style.display = 'none';
+
+        if (type === 'candidate') {
+            candidateSec.style.display = 'block';
+            // Required attributes validation fix
+            if (elements.aiProvince) elements.aiProvince.setAttribute('required', '');
+            if (elements.aiNewsSelect) elements.aiNewsSelect.removeAttribute('required');
+            if (elements.aiPartySelect) elements.aiPartySelect.removeAttribute('required');
+        } else if (type === 'news') {
+            newsSec.style.display = 'block';
+            populateNewsSelectorInAI();
+            if (elements.aiProvince) elements.aiProvince.removeAttribute('required');
+            if (elements.aiNewsSelect) elements.aiNewsSelect.setAttribute('required', '');
+            if (elements.aiPartySelect) elements.aiPartySelect.removeAttribute('required');
+        } else if (type === 'party') {
+            partySec.style.display = 'block';
+            populatePartySelectorInAI();
+            if (elements.aiProvince) elements.aiProvince.removeAttribute('required');
+            if (elements.aiNewsSelect) elements.aiNewsSelect.removeAttribute('required');
+            if (elements.aiPartySelect) elements.aiPartySelect.setAttribute('required', '');
+        }
+    }
+
+    // Initial State Check
+    // if (elements.aiSourceType) handleAnalysisTypeChange(elements.aiSourceType.value);
+
     // AI Form Location Selectors
     elements.aiProvince.addEventListener('change', (e) => {
         loadDistricts(e.target.value, null, elements.aiDistrict, elements.aiConstituency);
@@ -2181,19 +2213,38 @@ function initEventListeners() {
     });
 
     // Library Filter
+    // Library Filter
     elements.libraryDateFilter.addEventListener('change', (e) => {
         if (e.target.value) {
             elements.clearLibraryFilter.style.display = 'flex';
         } else {
             elements.clearLibraryFilter.style.display = 'none';
         }
-        renderLibraryTable();
+
+        // Reload current active tab
+        const activeTab = document.querySelector('.library-tab.active')?.dataset.tab || 'candidates';
+        if (activeTab === 'candidates') {
+            loadCandidatesLibrary();
+        } else if (activeTab === 'news') {
+            loadNewsMediaLibrary();
+        } else if (activeTab === 'parties') {
+            loadPartiesLibrary();
+        }
     });
 
     elements.clearLibraryFilter.addEventListener('click', () => {
         elements.libraryDateFilter.value = '';
         elements.clearLibraryFilter.style.display = 'none';
-        renderLibraryTable();
+
+        // Reload current active tab to fetch all data
+        const activeTab = document.querySelector('.library-tab.active')?.dataset.tab || 'candidates';
+        if (activeTab === 'candidates') {
+            loadCandidatesLibrary();
+        } else if (activeTab === 'news') {
+            loadNewsMediaLibrary();
+        } else if (activeTab === 'parties') {
+            loadPartiesLibrary();
+        }
     });
 
     // Home button (header brand)
@@ -2252,17 +2303,18 @@ async function loadRecentConstituencies() {
 
         if (constituencies && constituencies.length > 0) {
             elements.recentTags.innerHTML = constituencies.map(c => {
-                // Abbreviate "Constituency No." to "#" for cleaner UI
+                // Abbreviate "Constituency No." to just the number for cleaner UI
                 const shortName = c.constituency_name
-                    .replace('Constituency No.', '#')
-                    .replace('Constituency', '#')
-                    .replace('निर्वाचन क्षेत्र नं.', '#')
-                    .replace('निर्वाचन क्षेत्र', '#');
+                    .replace('Constituency No.', '')
+                    .replace('Constituency', '')
+                    .replace('निर्वाचन क्षेत्र नं.', '')
+                    .replace('निर्वाचन क्षेत्र', '')
+                    .replace('#', '')
+                    .trim();
 
                 return `
                 <div class="recent-tag" onclick="openRecentConstituency(${c.constituency_id}, ${c.province_id}, ${c.district_id})" style="display: inline-flex; align-items: center; gap: 6px;">
-                    <i data-lucide="clock" style="width: 14px; height: 14px; flex-shrink: 0;"></i>
-                    <span>${shortName}, ${c.district_name}</span>
+                    <span>${c.district_name}, ${shortName}</span>
                 </div>
             `}).join('');
 
@@ -2347,6 +2399,16 @@ function populateCandidateSelectorInAI(candidates) {
 
 async function openAIModal() {
     elements.aiForm.reset();
+
+    // Reset to "Candidate" view using the segmented control
+    const candidateBtn = document.querySelector('.segment-btn[data-value="candidate"]');
+    if (candidateBtn) {
+        candidateBtn.click();
+    } else {
+        // Fallback if elements aren't initialized
+        elements.aiSourceType.value = 'candidate';
+    }
+
     elements.aiProvince.value = '';
     resetSelect(elements.aiDistrict, 'Select District');
     resetSelect(elements.aiConstituency, 'Select Constituency');
@@ -2365,6 +2427,32 @@ async function openAIModal() {
     await populateSelect(elements.aiProvince, state.provinces, 'name_en');
 
     elements.aiModal.classList.add('active');
+}
+
+async function populateNewsSelectorInAI() {
+    try {
+        const sources = await API.get('/news-media');
+        elements.aiNewsSelect.innerHTML = '<option value="">-- Select News Source --</option>';
+        sources.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = s.name_en || s.name_np;
+            elements.aiNewsSelect.appendChild(opt);
+        });
+    } catch (e) { console.error('Failed to load news sources', e); }
+}
+
+async function populatePartySelectorInAI() {
+    try {
+        const parties = await API.get('/parties');
+        elements.aiPartySelect.innerHTML = '<option value="">-- Select Political Party --</option>';
+        parties.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = p.name_en || p.name_np || p.abbreviation;
+            elements.aiPartySelect.appendChild(opt);
+        });
+    } catch (e) { console.error('Failed to load parties', e); }
 }
 
 function closeAIModal() {
@@ -2403,7 +2491,25 @@ async function handleAISubmit(e) {
     elements.aiSubmitBtn.disabled = true;
 
     const formData = new FormData();
-    formData.append('candidate_id', candidateId);
+    const sourceType = elements.aiSourceType.value;
+
+    // Add source identifier based on type
+    if (sourceType === 'candidate') {
+        const candidateId = elements.aiCandidateSelect.value;
+        if (!candidateId) { showToast('Please select a candidate', 'error'); elements.aiLoading.style.display = 'none'; elements.aiSubmitBtn.disabled = false; return; }
+        formData.append('candidate_id', candidateId);
+        formData.append('source_type', 'candidate');
+    } else if (sourceType === 'news') {
+        const newsId = elements.aiNewsSelect.value;
+        if (!newsId) { showToast('Please select a news source', 'error'); elements.aiLoading.style.display = 'none'; elements.aiSubmitBtn.disabled = false; return; }
+        formData.append('news_media_id', newsId);
+        formData.append('source_type', 'news_media');
+    } else if (sourceType === 'party') {
+        const partyId = elements.aiPartySelect.value;
+        if (!partyId) { showToast('Please select a political party', 'error'); elements.aiLoading.style.display = 'none'; elements.aiSubmitBtn.disabled = false; return; }
+        formData.append('political_party_id', partyId);
+        formData.append('source_type', 'political_party');
+    }
 
     // Add source URL if provided
     const sourceUrl = elements.aiSourceUrl?.value?.trim();
@@ -2505,8 +2611,964 @@ async function init() {
     initEventListeners();
     await loadProvinces();
     await loadRecentConstituencies();
+    initAddSourceDropdown();
+    initLibraryTabs();
+    initNewModals();
+    initDailyReports();
     console.log('✅ App ready!');
+}
+
+// ============================================
+// Add Source Dropdown
+// ============================================
+function initAddSourceDropdown() {
+    const btn = document.getElementById('addSourceBtn');
+    const menu = document.getElementById('addSourceMenu');
+    if (!btn || !menu) return;
+
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        menu.classList.toggle('show');
+    });
+
+    document.addEventListener('click', () => {
+        if (menu) menu.classList.remove('show');
+    });
+
+    // News Article button
+    document.getElementById('addNewsArticleBtn')?.addEventListener('click', () => {
+        menu.classList.remove('show');
+        openNewsArticleModal();
+    });
+
+    // Party Post button
+    document.getElementById('addPartyPostBtn')?.addEventListener('click', () => {
+        menu.classList.remove('show');
+        openPartyPostModal();
+    });
+
+    // Candidate Post button
+    document.getElementById('addCandidateBtn')?.addEventListener('click', () => {
+        menu.classList.remove('show');
+        // openCandidateModal is attached in initEventListeners, 
+        // but verify if that listener triggers if elements are cached on init
+    });
+}
+
+// ============================================
+// Library Tabs
+// ============================================
+function initLibraryTabs() {
+    document.querySelectorAll('.library-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            // Update tab styles
+            document.querySelectorAll('.library-tab').forEach(t => {
+                t.style.color = '#999';
+                t.style.borderBottom = '2px solid transparent';
+                t.classList.remove('active');
+            });
+            tab.style.color = '#10B981';
+            tab.style.borderBottom = '2px solid #10B981';
+            tab.classList.add('active');
+
+            // Show corresponding content
+            const tabName = tab.dataset.tab;
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.style.display = 'none';
+            });
+
+            if (tabName === 'candidates') {
+                document.getElementById('tabCandidates').style.display = 'block';
+                loadCandidatesLibrary();
+            } else if (tabName === 'news') {
+                document.getElementById('tabNews').style.display = 'block';
+                loadNewsMediaLibrary();
+            } else if (tabName === 'parties') {
+                document.getElementById('tabParties').style.display = 'block';
+                loadPartiesLibrary();
+            }
+        });
+    });
+
+    // Add News Source / Party buttons in library
+    document.getElementById('addNewsMediaBtn')?.addEventListener('click', () => {
+        closeLibrary();
+        openNewsArticleModal();
+    });
+
+    document.getElementById('addPartyBtn')?.addEventListener('click', () => {
+        closeLibrary();
+        openPartyPostModal();
+    });
+
+    document.getElementById('addCandidateLibraryBtn')?.addEventListener('click', () => {
+        closeLibrary();
+        openCandidateModal();
+    });
+}
+
+// ============================================
+// Candidates Library Load (New)
+// ============================================
+async function loadCandidatesLibrary() {
+    // Check if we are in library modal
+    if (!elements.libraryModal.classList.contains('active')) return;
+
+    elements.libraryLoading = true; // Optional flag
+
+    try {
+        const date = elements.libraryDateFilter ? elements.libraryDateFilter.value : '';
+        const url = `/library/candidates${date ? '?date=' + date : ''}`;
+
+        // Use the Updated Endpoint
+        const candidates = await API.get(url);
+
+        // Sort by date descending (Newest first)
+        libraryData = candidates
+            .filter(c => c.post)
+            .sort((a, b) => new Date(b.post.published_date || 0) - new Date(a.post.published_date || 0));
+
+        renderLibraryTable(); // Render using the data
+
+    } catch (error) {
+        console.error('Failed to load candidates library:', error);
+        showToast('Failed to load candidates', 'error');
+        elements.libraryTableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #666;">Failed to load</td></tr>';
+    }
+}
+
+// ============================================
+// News Media Library Load
+// ============================================
+async function loadNewsMediaLibrary() {
+    const tbody = document.getElementById('newsTableBody');
+    const empty = document.getElementById('newsEmpty');
+    const count = document.getElementById('newsCount');
+    if (!tbody) return;
+
+    try {
+        const date = elements.libraryDateFilter ? elements.libraryDateFilter.value : '';
+        // Use unified library endpoint which supports date
+        const url = `/library/news-media${date ? '?date=' + date : ''}`;
+
+        const response = await fetch(`/api${url}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+        });
+
+        if (!response.ok) throw new Error('Failed to load news media');
+
+        const data = await response.json();
+        // Store for export
+        libraryNewsData = data;
+
+        count.textContent = `${data.length || 0} sources`;
+
+        if (!data || data.length === 0) {
+            tbody.innerHTML = '';
+            empty.style.display = 'block';
+            return;
+        }
+
+        // Sort by post count or recent activity? 
+        // News media usually don't have a single "published_date" field on the source itself, 
+        // but the table shows 'Source Name', 'Posts', 'Sentiments'.
+        // It doesn't show "Date".
+        // Wait, the table columns are: Source Name, Posts, Pos, Neg, Neu, Actions.
+        // It does NOT show date.
+        // So sorting by date is not visible, but maybe consistent?
+        // Let's sort by Post Count descending? Or Name?
+        // User asked to "short all of them by date".
+        // If I filter by date, the data returned IS for that date range.
+        // But News Media is an aggregate (Source).
+        // The endpoint returns Sources with aggregate sentiment FOR that date range.
+        // So sorting by Sentiment or Post Count makes sense.
+        // I will sort by Post Count descending.
+        data.sort((a, b) => (b.posts_count || 0) - (a.posts_count || 0));
+
+        empty.style.display = 'none';
+        tbody.innerHTML = data.map(n => `
+            <tr>
+                <td>${escapeHtml(n.name_en || n.name_np || 'N/A')}</td>
+                <td>${n.posts_count || 0}</td>
+                <td class="sentiment-positive">${(n.avg_positive || 0).toFixed(1)}%</td>
+                <td class="sentiment-negative">${(n.avg_negative || 0).toFixed(1)}%</td>
+                <td class="sentiment-neutral">${(n.avg_neutral || 0).toFixed(1)}%</td>
+                <td>
+                    <button class="btn btn--icon btn--small" onclick="viewNewsDetails(${n.id})" title="View">
+                        <i data-lucide="eye"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+
+        lucide?.createIcons();
+    } catch (error) {
+        console.error('Error loading news media:', error);
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #666;">Failed to load</td></tr>';
+    }
+}
+
+// ============================================
+// Political Parties Library Load
+// ============================================
+async function loadPartiesLibrary() {
+    const tbody = document.getElementById('partiesTableBody');
+    const empty = document.getElementById('partiesEmpty');
+    const count = document.getElementById('partiesCount');
+    if (!tbody) return;
+
+    try {
+        const date = elements.libraryDateFilter ? elements.libraryDateFilter.value : '';
+        // Use unified library endpoint which supports date
+        const url = `/library/parties${date ? '?date=' + date : ''}`;
+
+        const response = await fetch(`/api${url}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+        });
+
+        if (!response.ok) throw new Error('Failed to load parties');
+
+        const data = await response.json();
+        // Store for export
+        libraryPartiesData = data;
+
+        count.textContent = `${data.length || 0} parties`;
+
+        if (!data || data.length === 0) {
+            tbody.innerHTML = '';
+            empty.style.display = 'block';
+            return;
+        }
+
+        // Sort by Post Count descending
+        data.sort((a, b) => (b.posts_count || 0) - (a.posts_count || 0));
+
+        empty.style.display = 'none';
+        tbody.innerHTML = data.map(p => `
+            <tr>
+                <td>${escapeHtml(p.name_en || p.name_np || 'N/A')}</td>
+                <td>${escapeHtml(p.abbreviation || '-')}</td>
+                <td>${p.posts_count || 0}</td>
+                <td class="sentiment-positive">${(p.avg_positive || 0).toFixed(1)}%</td>
+                <td class="sentiment-negative">${(p.avg_negative || 0).toFixed(1)}%</td>
+                <td class="sentiment-neutral">${(p.avg_neutral || 0).toFixed(1)}%</td>
+                <td>
+                    <button class="btn btn--icon btn--small" onclick="viewPartyDetails(${p.id})" title="View">
+                        <i data-lucide="eye"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+
+        lucide?.createIcons();
+    } catch (error) {
+        console.error('Error loading parties:', error);
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #666;">Failed to load</td></tr>';
+    }
+}
+
+// ============================================
+// News Article Modal
+// ============================================
+function initNewModals() {
+    // News Article Modal
+    const newsModal = document.getElementById('newsArticleModal');
+    const newsForm = document.getElementById('newsArticleForm');
+    const newsSourceSelect = document.getElementById('newsSourceSelect');
+    const newsCloseBtn = document.getElementById('newsArticleModalClose');
+    const newsCancelBtn = document.getElementById('newsArticleModalCancel');
+
+    newsCloseBtn?.addEventListener('click', () => closeNewsArticleModal());
+    newsCancelBtn?.addEventListener('click', () => closeNewsArticleModal());
+    newsModal?.addEventListener('click', (e) => {
+        if (e.target === newsModal) closeNewsArticleModal();
+    });
+
+    newsSourceSelect?.addEventListener('change', (e) => {
+        const newRow = document.getElementById('newNewsSourceRow');
+        if (e.target.value === 'new') {
+            newRow.style.display = 'block';
+        } else {
+            newRow.style.display = 'none';
+        }
+    });
+
+    newsForm?.addEventListener('submit', handleNewsArticleSubmit);
+
+    // Party Post Modal
+    const partyModal = document.getElementById('partyPostModal');
+    const partyForm = document.getElementById('partyPostForm');
+    const partySelect = document.getElementById('partySelect');
+    const partyCloseBtn = document.getElementById('partyPostModalClose');
+    const partyCancelBtn = document.getElementById('partyPostModalCancel');
+
+    partyCloseBtn?.addEventListener('click', () => closePartyPostModal());
+    partyCancelBtn?.addEventListener('click', () => closePartyPostModal());
+    partyModal?.addEventListener('click', (e) => {
+        if (e.target === partyModal) closePartyPostModal();
+    });
+
+    partySelect?.addEventListener('change', (e) => {
+        const newPartyRow = document.getElementById('newPartyRow');
+        const abbrevRow = document.getElementById('partyAbbrevRow');
+        if (e.target.value === 'new') {
+            newPartyRow.style.display = 'block';
+            abbrevRow.style.display = 'block';
+        } else {
+            newPartyRow.style.display = 'none';
+            abbrevRow.style.display = 'none';
+        }
+    });
+
+    partyForm?.addEventListener('submit', handlePartyPostSubmit);
+}
+
+async function openNewsArticleModal() {
+    const modal = document.getElementById('newsArticleModal');
+    const select = document.getElementById('newsSourceSelect');
+
+    // Reset form
+    document.getElementById('newsArticleForm')?.reset();
+    document.getElementById('newNewsSourceRow').style.display = 'none';
+
+    // Load existing news sources
+    try {
+        const response = await fetch('/api/news-media', {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+        });
+        if (response.ok) {
+            const sources = await response.json();
+            select.innerHTML = '<option value="">-- Select or Add New --</option><option value="new">+ Add New News Source</option>';
+            sources.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.textContent = s.name_en || s.name_np;
+                select.appendChild(opt);
+            });
+        }
+    } catch (e) {
+        console.error('Error loading news sources:', e);
+    }
+
+    modal?.classList.add('active');
+    lucide?.createIcons();
+}
+
+function closeNewsArticleModal() {
+    document.getElementById('newsArticleModal')?.classList.remove('active');
+}
+
+async function handleNewsArticleSubmit(e) {
+    e.preventDefault();
+
+    const sourceSelect = document.getElementById('newsSourceSelect');
+    const newSourceName = document.getElementById('newNewsSourceName');
+
+    let sourceId = sourceSelect.value;
+
+    // Create new source if needed
+    if (sourceId === 'new') {
+        if (!newSourceName.value.trim()) {
+            showToast('Please enter source name', 'error');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/news-media', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify({ name_en: newSourceName.value.trim() })
+            });
+
+            if (!res.ok) throw new Error('Failed to create source');
+            const newSource = await res.json();
+            sourceId = newSource.id;
+        } catch (err) {
+            showToast('Failed to create news source', 'error');
+            return;
+        }
+    }
+
+    // Create post for this source
+    const postData = {
+        news_media_id: sourceId,
+        post_url: document.getElementById('newsArticleUrl')?.value || '',
+        published_date: document.getElementById('newsArticleDate')?.value || null,
+        positive_percentage: parseFloat(document.getElementById('newsPositive')?.value) || 0,
+        negative_percentage: parseFloat(document.getElementById('newsNegative')?.value) || 0,
+        neutral_percentage: parseFloat(document.getElementById('newsNeutral')?.value) || 0,
+        remarks: document.getElementById('newsRemarks')?.value || ''
+    };
+
+    try {
+        const res = await fetch('/api/media-posts', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+            },
+            body: JSON.stringify(postData)
+        });
+
+        if (!res.ok) throw new Error('Failed to save article');
+        showToast('News article saved successfully!', 'success');
+        closeNewsArticleModal();
+    } catch (err) {
+        showToast('Failed to save article: ' + err.message, 'error');
+    }
+}
+
+async function openPartyPostModal() {
+    const modal = document.getElementById('partyPostModal');
+    const select = document.getElementById('partySelect');
+
+    // Reset form
+    document.getElementById('partyPostForm')?.reset();
+    document.getElementById('newPartyRow').style.display = 'none';
+    document.getElementById('partyAbbrevRow').style.display = 'none';
+
+    // Load existing parties
+    try {
+        const response = await fetch('/api/parties', {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+        });
+        if (response.ok) {
+            const parties = await response.json();
+            select.innerHTML = '<option value="">-- Select or Add New --</option><option value="new">+ Add New Party</option>';
+            parties.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = p.name_en || p.name_np || p.abbreviation;
+                select.appendChild(opt);
+            });
+        }
+    } catch (e) {
+        console.error('Error loading parties:', e);
+    }
+
+    modal?.classList.add('active');
+    lucide?.createIcons();
+}
+
+function closePartyPostModal() {
+    document.getElementById('partyPostModal')?.classList.remove('active');
+}
+
+async function handlePartyPostSubmit(e) {
+    e.preventDefault();
+
+    const partySelect = document.getElementById('partySelect');
+    const newPartyName = document.getElementById('newPartyName');
+    const newPartyAbbrev = document.getElementById('newPartyAbbrev');
+
+    let partyId = partySelect.value;
+
+    // Create new party if needed
+    if (partyId === 'new') {
+        if (!newPartyName.value.trim()) {
+            showToast('Please enter party name', 'error');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/parties', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify({
+                    name_en: newPartyName.value.trim(),
+                    abbreviation: newPartyAbbrev.value.trim() || null
+                })
+            });
+
+            if (!res.ok) throw new Error('Failed to create party');
+            const newParty = await res.json();
+            partyId = newParty.id;
+        } catch (err) {
+            showToast('Failed to create party', 'error');
+            return;
+        }
+    }
+
+    // Create post for this party
+    const postData = {
+        political_party_id: partyId,
+        post_url: document.getElementById('partyPostUrl')?.value || '',
+        published_date: document.getElementById('partyPostDate')?.value || null,
+        positive_percentage: parseFloat(document.getElementById('partyPositive')?.value) || 0,
+        negative_percentage: parseFloat(document.getElementById('partyNegative')?.value) || 0,
+        neutral_percentage: parseFloat(document.getElementById('partyNeutral')?.value) || 0,
+        remarks: document.getElementById('partyRemarks')?.value || ''
+    };
+
+    try {
+        const res = await fetch('/api/media-posts', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+            },
+            body: JSON.stringify(postData)
+        });
+
+        if (!res.ok) throw new Error('Failed to save post');
+        showToast('Party post saved successfully!', 'success');
+        closePartyPostModal();
+    } catch (err) {
+        showToast('Failed to save post: ' + err.message, 'error');
+    }
+}
+
+// ============================================
+// Daily Reports Module
+// ============================================
+let rptPieChart = null;
+let rptBarChart = null;
+
+function initDailyReports() {
+    const btn = document.getElementById('dailyReportsBtn');
+    const modal = document.getElementById('dailyReportsModal');
+    const closeBtn = document.getElementById('dailyReportsModalClose');
+    const generateBtn = document.getElementById('generateReportBtn');
+    const datePicker = document.getElementById('reportDatePicker');
+
+    if (!btn || !modal) return;
+
+    const today = new Date().toISOString().split('T')[0];
+    if (datePicker) datePicker.value = today;
+
+    btn.addEventListener('click', () => openDailyReportsModal());
+    closeBtn?.addEventListener('click', () => closeDailyReportsModal());
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeDailyReportsModal();
+    });
+
+    generateBtn?.addEventListener('click', () => generateDailyReport());
+    datePicker?.addEventListener('change', () => loadReportForDate(datePicker.value));
+
+    // Download Button
+    const downloadBtn = document.getElementById('downloadReportBtn');
+    downloadBtn?.addEventListener('click', downloadDailyReportPDF);
+}
+
+function updateDownloadButtonVisibility(hasData) {
+    const btn = document.getElementById('downloadReportBtn');
+    if (btn) btn.style.display = hasData ? 'flex' : 'none';
+}
+
+function openDailyReportsModal() {
+    const modal = document.getElementById('dailyReportsModal');
+    modal?.classList.add('active');
+    lucide?.createIcons();
+
+    const datePicker = document.getElementById('reportDatePicker');
+    const today = new Date().toISOString().split('T')[0];
+    if (datePicker) datePicker.value = today;
+    loadReportForDate(today);
+}
+
+function closeDailyReportsModal() {
+    document.getElementById('dailyReportsModal')?.classList.remove('active');
+}
+
+async function loadReportForDate(date) {
+    const loading = document.getElementById('reportLoading');
+    const noData = document.getElementById('reportNoData');
+    const content = document.getElementById('reportContent');
+    const status = document.getElementById('reportStatus');
+
+    if (!loading || !noData || !content) return;
+
+    loading.style.display = 'block';
+    noData.style.display = 'none';
+    content.style.display = 'none';
+
+    try {
+        const response = await fetch(`/api/reports/daily/${date}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+        });
+
+        if (!response.ok) {
+            loading.style.display = 'none';
+            noData.style.display = 'block';
+            if (status) status.textContent = 'No report found for this date';
+            updateDownloadButtonVisibility(false);
+            return;
+        }
+
+        const report = await response.json();
+        renderDailyReport(report);
+
+        loading.style.display = 'none';
+        content.style.display = 'block';
+        if (status) status.textContent = `Generated: ${new Date(report.generated_at || report.created_at).toLocaleString()}`;
+        updateDownloadButtonVisibility(true);
+
+    } catch (error) {
+        console.error('Error loading report:', error);
+        loading.style.display = 'none';
+        noData.style.display = 'block';
+        if (status) status.textContent = 'Failed to load report';
+    }
+}
+
+async function generateDailyReport() {
+    const loading = document.getElementById('reportLoading');
+    const noData = document.getElementById('reportNoData');
+    const content = document.getElementById('reportContent');
+    const status = document.getElementById('reportStatus');
+    const datePicker = document.getElementById('reportDatePicker');
+
+    if (!loading || !noData || !content) return;
+
+    loading.style.display = 'block';
+    noData.style.display = 'none';
+    content.style.display = 'none';
+    if (status) status.textContent = 'Generating report with AI analysis...';
+
+    try {
+        const response = await fetch('/api/reports/generate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+            },
+            body: JSON.stringify({ date: datePicker?.value })
+        });
+
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'Failed to generate report');
+        }
+
+        const report = await response.json();
+        renderDailyReport(report);
+
+        loading.style.display = 'none';
+        content.style.display = 'block';
+        if (status) status.textContent = `Generated: ${new Date().toLocaleString()}`;
+        updateDownloadButtonVisibility(true);
+        showToast('Daily report generated successfully!', 'success');
+
+    } catch (error) {
+        console.error('Error generating report:', error);
+        loading.style.display = 'none';
+        noData.style.display = 'block';
+        if (status) status.textContent = 'Failed to generate report';
+        showToast(error.message, 'error');
+    }
+}
+
+async function downloadDailyReportPDF() {
+    const content = document.getElementById('reportContent');
+    const status = document.getElementById('reportStatus');
+    const datePicker = document.getElementById('reportDatePicker');
+
+    if (!content) return;
+
+    if (status) status.textContent = 'Generating PDF...';
+
+    try {
+        const date = datePicker?.value || new Date().toISOString().split('T')[0];
+
+        // Ensure Lucide icons are rendered before capture
+        lucide?.createIcons();
+
+        const canvas = await html2canvas(content, {
+            scale: 2, // Retain high quality
+            useCORS: true,
+            backgroundColor: '#0a0a0c', // Dark theme background
+            logging: false
+        });
+
+        const imgData = canvas.toDataURL('image/png');
+
+        // A4 size: 210 x 297 mm
+        const pdf = new jspdf.jsPDF('p', 'mm', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+
+        const imgWidth = pdfWidth - 20; // 10mm margin each side
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+        // Add Title
+        pdf.setTextColor(40, 40, 40);
+        pdf.setFontSize(18);
+        pdf.text(`Daily Political Sentiment Report - ${date}`, 10, 15);
+
+        // Add Image
+        let heightLeft = imgHeight;
+        let position = 25; // Start below title
+
+        pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+        heightLeft -= (pdfHeight - position);
+
+        // Handle multi-page content if necessary (basic implementation)
+        while (heightLeft >= 0) {
+            position = heightLeft - imgHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 10, position - 25, imgWidth, imgHeight); // Adjust for margin
+            heightLeft -= pdfHeight;
+        }
+
+        pdf.save(`nepal-election-report-${date}.pdf`);
+
+        if (status) status.textContent = 'PDF Downloaded!';
+        showToast('Report downloaded successfully', 'success');
+
+    } catch (error) {
+        console.error('PDF Generation Error:', error);
+        if (status) status.textContent = 'Failed to generate PDF';
+        showToast('Failed to generate PDF', 'error');
+    }
+}
+
+function renderDailyReport(report) {
+    // Summary cards
+    const postsEl = document.getElementById('rptTotalPosts');
+    const commentsEl = document.getElementById('rptTotalComments');
+    const positiveEl = document.getElementById('rptPositive');
+    const negativeEl = document.getElementById('rptNegative');
+    const neutralEl = document.getElementById('rptNeutral');
+
+    if (postsEl) postsEl.textContent = report.total_posts_analyzed || 0;
+    if (commentsEl) commentsEl.textContent = (report.total_comments_analyzed || 0).toLocaleString();
+    if (positiveEl) positiveEl.textContent = `${(report.overall_positive || 0).toFixed(1)}%`;
+    if (negativeEl) negativeEl.textContent = `${(report.overall_negative || 0).toFixed(1)}%`;
+    if (neutralEl) neutralEl.textContent = `${(report.overall_neutral || 0).toFixed(1)}%`;
+
+    // AI Summary
+    const summaryEl = document.getElementById('rptAISummary');
+    if (summaryEl) {
+        summaryEl.innerHTML = report.summary_text
+            ? report.summary_text.replace(/\n/g, '<br>')
+            : '<em>No AI summary available for this report.</em>';
+    }
+
+    // Render charts
+    renderReportCharts(report);
+
+    // Render source table
+    renderSourceTable(report.summaries || []);
+
+    lucide?.createIcons();
+}
+
+function renderReportCharts(report) {
+    const pieCtx = document.getElementById('rptPieChart');
+    const barCtx = document.getElementById('rptBarChart');
+
+    if (!pieCtx) return;
+
+    // Destroy existing charts
+    if (rptPieChart) { rptPieChart.destroy(); rptPieChart = null; }
+    if (rptBarChart) { rptBarChart.destroy(); rptBarChart = null; }
+
+    // Pie Chart
+    rptPieChart = new Chart(pieCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Positive', 'Negative', 'Neutral'],
+            datasets: [{
+                data: [report.overall_positive || 0, report.overall_negative || 0, report.overall_neutral || 0],
+                backgroundColor: ['#10B981', '#EF4444', '#6B7280'],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: { legend: { position: 'bottom', labels: { color: '#999', padding: 20 } } }
+        }
+    });
+
+    // Bar Chart from summaries
+    const summaries = report.summaries || [];
+    if (summaries.length > 0 && barCtx) {
+        rptBarChart = new Chart(barCtx, {
+            type: 'bar',
+            data: {
+                labels: summaries.map(s => s.source_name || s.source_type),
+                datasets: [
+                    { label: 'Positive', data: summaries.map(s => s.avg_positive || 0), backgroundColor: '#10B981' },
+                    { label: 'Negative', data: summaries.map(s => s.avg_negative || 0), backgroundColor: '#EF4444' },
+                    { label: 'Neutral', data: summaries.map(s => s.avg_neutral || 0), backgroundColor: '#6B7280' }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: { legend: { position: 'bottom', labels: { color: '#999' } } },
+                scales: {
+                    x: { ticks: { color: '#999' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                    y: { ticks: { color: '#999' }, grid: { color: 'rgba(255,255,255,0.05)' }, max: 100 }
+                }
+            }
+        });
+    }
+}
+
+function renderSourceTable(summaries) {
+    const tbody = document.getElementById('rptSourceTable');
+    if (!tbody) return;
+
+    if (!summaries || summaries.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="padding: 20px; text-align: center; color: #666;">No source data available</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = summaries.map(s => `
+        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+            <td style="padding: 12px; color: #f0f0f0;">${s.source_name || s.source_type}</td>
+            <td style="padding: 12px; text-align: center; color: #999;">${s.posts_count || 0}</td>
+            <td style="padding: 12px; text-align: center; color: #10B981;">${(s.avg_positive || 0).toFixed(1)}%</td>
+            <td style="padding: 12px; text-align: center; color: #EF4444;">${(s.avg_negative || 0).toFixed(1)}%</td>
+            <td style="padding: 12px; text-align: center; color: #6B7280;">${(s.avg_neutral || 0).toFixed(1)}%</td>
+        </tr>
+    `).join('');
 }
 
 // Start the app
 init();
+
+// ============================================
+// Export Functions
+// ============================================
+
+// --- News Exports ---
+function exportNewsToExcel() {
+    if (!libraryNewsData || libraryNewsData.length === 0) {
+        showToast('No news data to export', 'error');
+        return;
+    }
+
+    const exportData = libraryNewsData.map(item => ({
+        'Source Name': item.name_en || item.name_np || 'N/A',
+        'Total Posts': item.posts_count || 0,
+        'Positive %': (item.avg_positive || 0).toFixed(2),
+        'Negative %': (item.avg_negative || 0).toFixed(2),
+        'Neutral %': (item.avg_neutral || 0).toFixed(2)
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "News Analysis");
+    XLSX.writeFile(wb, `news_analysis_${new Date().toISOString().split('T')[0]}.xlsx`);
+    showToast('News analysis exported to Excel', 'success');
+}
+
+function exportNewsToPDF() {
+    if (!libraryNewsData || libraryNewsData.length === 0) {
+        showToast('No news data to export', 'error');
+        return;
+    }
+
+    const doc = new jspdf.jsPDF();
+
+    // Header
+    doc.setFontSize(18);
+    doc.text('News Media Analysis Report', 14, 22);
+
+    doc.setFontSize(11);
+    doc.setTextColor(100);
+    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 30);
+
+    const tableColumn = ["Source Name", "Posts", "Positive %", "Negative %", "Neutral %"];
+    const tableRows = libraryNewsData.map(item => [
+        item.name_en || item.name_np || 'N/A',
+        item.posts_count || 0,
+        (item.avg_positive || 0).toFixed(1) + '%',
+        (item.avg_negative || 0).toFixed(1) + '%',
+        (item.avg_neutral || 0).toFixed(1) + '%'
+    ]);
+
+    doc.autoTable({
+        head: [tableColumn],
+        body: tableRows,
+        startY: 40,
+        theme: 'grid',
+        styles: { fontSize: 10, cellPadding: 3 },
+        headStyles: { fillColor: [41, 128, 185], textColor: 255 }
+    });
+
+    doc.save(`news_analysis_${new Date().toISOString().split('T')[0]}.pdf`);
+    showToast('News analysis exported to PDF', 'success');
+}
+
+// --- Party Exports ---
+function exportPartiesToExcel() {
+    if (!libraryPartiesData || libraryPartiesData.length === 0) {
+        showToast('No party data to export', 'error');
+        return;
+    }
+
+    const exportData = libraryPartiesData.map(item => ({
+        'Party Name': item.name_en || item.name_np || 'N/A',
+        'Abbreviation': item.abbreviation || '',
+        'Total Posts': item.posts_count || 0,
+        'Positive %': (item.avg_positive || 0).toFixed(2),
+        'Negative %': (item.avg_negative || 0).toFixed(2),
+        'Neutral %': (item.avg_neutral || 0).toFixed(2)
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Party Analysis");
+    XLSX.writeFile(wb, `party_analysis_${new Date().toISOString().split('T')[0]}.xlsx`);
+    showToast('Party analysis exported to Excel', 'success');
+}
+
+function exportPartiesToPDF() {
+    if (!libraryPartiesData || libraryPartiesData.length === 0) {
+        showToast('No party data to export', 'error');
+        return;
+    }
+
+    const doc = new jspdf.jsPDF();
+
+    // Header
+    doc.setFontSize(18);
+    doc.text('Political Party Analysis Report', 14, 22);
+
+    doc.setFontSize(11);
+    doc.setTextColor(100);
+    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 30);
+
+    const tableColumn = ["Party Name", "Abbr", "Posts", "Positive %", "Negative %", "Neutral %"];
+    const tableRows = libraryPartiesData.map(item => [
+        item.name_en || item.name_np || 'N/A',
+        item.abbreviation || '-',
+        item.posts_count || 0,
+        (item.avg_positive || 0).toFixed(1) + '%',
+        (item.avg_negative || 0).toFixed(1) + '%',
+        (item.avg_neutral || 0).toFixed(1) + '%'
+    ]);
+
+    doc.autoTable({
+        head: [tableColumn],
+        body: tableRows,
+        startY: 40,
+        theme: 'grid',
+        styles: { fontSize: 10, cellPadding: 3 },
+        headStyles: { fillColor: [46, 204, 113], textColor: 255 } // Green for parties
+    });
+
+    doc.save(`party_analysis_${new Date().toISOString().split('T')[0]}.pdf`);
+    showToast('Party analysis exported to PDF', 'success');
+}
+
+// Attach Event Listeners for Exports
+document.addEventListener('DOMContentLoaded', () => {
+    // News Exports
+    document.getElementById('exportNewsExcel')?.addEventListener('click', exportNewsToExcel);
+    document.getElementById('exportNewsPdf')?.addEventListener('click', exportNewsToPDF);
+
+    // Party Exports
+    document.getElementById('exportPartiesExcel')?.addEventListener('click', exportPartiesToExcel);
+    document.getElementById('exportPartiesPdf')?.addEventListener('click', exportPartiesToPDF);
+});

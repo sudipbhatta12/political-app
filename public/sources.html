@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Source Manager | Political Analysis</title>
+    <meta name="description" content="Manage news media and political party sources for analysis">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="/index.css">
+    <link rel="stylesheet" href="/components/components.css">
+
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0a0a0a;
+            color: #f0f0f0;
+            margin: 0;
+            min-height: 100vh;
+        }
+
+        .app-header {
+            background: rgba(255, 255, 255, 0.02);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .app-logo {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #10B981;
+        }
+
+        .app-nav {
+            display: flex;
+            gap: 8px;
+        }
+
+        .nav-link {
+            padding: 8px 16px;
+            color: #999;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .nav-link:hover {
+            color: #f0f0f0;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .nav-link.active {
+            color: #10B981;
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .user-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .logout-btn {
+            padding: 8px 16px;
+            background: rgba(239, 68, 68, 0.1);
+            color: #EF4444;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .logout-btn:hover {
+            background: rgba(239, 68, 68, 0.2);
+        }
+
+        main {
+            padding: 24px;
+        }
+    </style>
+</head>
+
+<body>
+    <header class="app-header">
+        <div class="app-logo">📊 Political Analysis</div>
+        <nav class="app-nav">
+            <a href="/app" class="nav-link">Dashboard</a>
+            <a href="/reports.html" class="nav-link">Daily Reports</a>
+            <a href="/sources.html" class="nav-link active">Sources</a>
+        </nav>
+        <div class="user-actions">
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+    </header>
+
+    <main>
+        <div id="source-manager-container"></div>
+    </main>
+
+    <!-- Components -->
+    <script src="/components/source-manager.js"></script>
+
+    <script>
+        // Check authentication
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+            window.location.href = '/';
+        }
+
+        function logout() {
+            fetch('/api/logout', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).finally(() => {
+                localStorage.removeItem('authToken');
+                window.location.href = '/';
+            });
+        }
+    </script>
+</body>
+
+</html>

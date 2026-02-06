@@ -528,8 +528,443 @@ app.get('/api/analytics/constituency/:id', async (req, res) => {
 app.post('/api/ai-analyze', upload.array('files', 10), analyzeComments);
 
 // ============================================
+// News Media Routes
+// ============================================
+const newsMediaLib = require('./libraries/news-media');
+
+// Get all news media agencies
+app.get('/api/news-media', async (req, res) => {
+    try {
+        const includeInactive = req.query.includeInactive === 'true';
+        const withSentiment = req.query.withSentiment === 'true';
+
+        if (withSentiment) {
+            const data = await newsMediaLib.getAllNewsMediaWithSentiment();
+            return res.json(data);
+        }
+
+        const data = await newsMediaLib.getAllNewsMedia(includeInactive);
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get news media by ID
+app.get('/api/news-media/:id', async (req, res) => {
+    try {
+        const data = await newsMediaLib.getNewsMediaById(parseInt(req.params.id));
+        if (!data) return res.status(404).json({ error: 'News media not found' });
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Create news media (only name_en required)
+app.post('/api/news-media', async (req, res) => {
+    try {
+        const { name_en } = req.body;
+        if (!name_en) {
+            return res.status(400).json({ error: 'Name (English) is required' });
+        }
+        const id = await newsMediaLib.createNewsMedia(req.body);
+        res.status(201).json({ id, message: 'News media created successfully' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Update news media
+app.put('/api/news-media/:id', async (req, res) => {
+    try {
+        const success = await newsMediaLib.updateNewsMedia(parseInt(req.params.id), req.body);
+        if (success) {
+            res.json({ message: 'News media updated successfully' });
+        } else {
+            res.status(500).json({ error: 'Update failed' });
+        }
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Delete news media
+app.delete('/api/news-media/:id', async (req, res) => {
+    try {
+        await newsMediaLib.deleteNewsMedia(parseInt(req.params.id));
+        res.json({ message: 'News media deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get posts by news media
+app.get('/api/news-media/:id/posts', async (req, res) => {
+    try {
+        const options = {
+            platform: req.query.platform,
+            startDate: req.query.startDate,
+            endDate: req.query.endDate,
+            limit: req.query.limit ? parseInt(req.query.limit) : undefined
+        };
+        const posts = await newsMediaLib.getPostsByNewsMedia(parseInt(req.params.id), options);
+        res.json(posts);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Create post for news media
+app.post('/api/news-media/:id/posts', async (req, res) => {
+    try {
+        const postId = await newsMediaLib.createNewsMediaPost(parseInt(req.params.id), req.body);
+        res.status(201).json({ id: postId, message: 'Post created successfully' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get news media sentiment summary
+app.get('/api/news-media/:id/sentiment', async (req, res) => {
+    try {
+        const dateRange = {
+            startDate: req.query.startDate,
+            endDate: req.query.endDate
+        };
+        const summary = await newsMediaLib.getNewsMediaSentimentSummary(parseInt(req.params.id), dateRange);
+        res.json(summary);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
+// Political Parties Routes
+// ============================================
+const partiesLib = require('./libraries/political-parties');
+
+// Get all parties
+app.get('/api/parties', async (req, res) => {
+    try {
+        const includeInactive = req.query.includeInactive === 'true';
+        const withSentiment = req.query.withSentiment === 'true';
+
+        if (withSentiment) {
+            const data = await partiesLib.getAllPartiesWithSentiment();
+            return res.json(data);
+        }
+
+        const data = await partiesLib.getAllParties(includeInactive);
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get party by ID
+app.get('/api/parties/:id', async (req, res) => {
+    try {
+        const data = await partiesLib.getPartyById(parseInt(req.params.id));
+        if (!data) return res.status(404).json({ error: 'Party not found' });
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Create party (only name_en required)
+app.post('/api/parties', async (req, res) => {
+    try {
+        const { name_en } = req.body;
+        if (!name_en) {
+            return res.status(400).json({ error: 'Name (English) is required' });
+        }
+        const id = await partiesLib.createParty(req.body);
+        res.status(201).json({ id, message: 'Party created successfully' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Update party
+app.put('/api/parties/:id', async (req, res) => {
+    try {
+        const success = await partiesLib.updateParty(parseInt(req.params.id), req.body);
+        if (success) {
+            res.json({ message: 'Party updated successfully' });
+        } else {
+            res.status(500).json({ error: 'Update failed' });
+        }
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Delete party
+app.delete('/api/parties/:id', async (req, res) => {
+    try {
+        await partiesLib.deleteParty(parseInt(req.params.id));
+        res.json({ message: 'Party deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get posts by party
+app.get('/api/parties/:id/posts', async (req, res) => {
+    try {
+        const options = {
+            platform: req.query.platform,
+            startDate: req.query.startDate,
+            endDate: req.query.endDate,
+            limit: req.query.limit ? parseInt(req.query.limit) : undefined
+        };
+        const posts = await partiesLib.getPostsByParty(parseInt(req.params.id), options);
+        res.json(posts);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Create post for party
+app.post('/api/parties/:id/posts', async (req, res) => {
+    try {
+        const postId = await partiesLib.createPartyPost(parseInt(req.params.id), req.body);
+        res.status(201).json({ id: postId, message: 'Post created successfully' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get party sentiment summary
+app.get('/api/parties/:id/sentiment', async (req, res) => {
+    try {
+        const dateRange = {
+            startDate: req.query.startDate,
+            endDate: req.query.endDate
+        };
+        const summary = await partiesLib.getPartySentimentSummary(parseInt(req.params.id), dateRange);
+        res.json(summary);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get party candidates
+app.get('/api/parties/:id/candidates', async (req, res) => {
+    try {
+        const party = await partiesLib.getPartyById(parseInt(req.params.id));
+        if (!party) return res.status(404).json({ error: 'Party not found' });
+
+        const candidates = await partiesLib.getPartyCandidates(party.name_en);
+        res.json(candidates);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
+// Daily Reports Routes
+// ============================================
+const dailyReportService = require('./services/daily-report');
+
+// Generate daily report (for today or specific date)
+app.post('/api/reports/generate', async (req, res) => {
+    try {
+        const { date } = req.body;
+        const result = await dailyReportService.generateDailyReport(date);
+
+        if (result.success) {
+            res.json(result);
+        } else {
+            res.status(400).json(result);
+        }
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get today's report
+app.get('/api/reports/daily', async (req, res) => {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const report = await dailyReportService.getReportByDate(today);
+
+        if (report) {
+            res.json(report);
+        } else {
+            res.json({
+                message: 'No report for today. Generate one first.',
+                report_date: today,
+                exists: false
+            });
+        }
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get report by date
+app.get('/api/reports/daily/:date', async (req, res) => {
+    try {
+        const report = await dailyReportService.getReportByDate(req.params.date);
+
+        if (report) {
+            res.json(report);
+        } else {
+            res.status(404).json({
+                message: 'No report found for this date',
+                report_date: req.params.date
+            });
+        }
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get report history
+app.get('/api/reports/history', async (req, res) => {
+    try {
+        const limit = req.query.limit ? parseInt(req.query.limit) : 30;
+        const reports = await dailyReportService.getReportHistory(limit);
+        res.json(reports);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get chart data for a report
+app.get('/api/reports/:id/charts', async (req, res) => {
+    try {
+        const chartData = await dailyReportService.getChartData(parseInt(req.params.id));
+
+        if (chartData) {
+            res.json(chartData);
+        } else {
+            res.status(404).json({ error: 'Report not found' });
+        }
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get sentiment trends
+app.get('/api/reports/trends', async (req, res) => {
+    try {
+        const days = req.query.days ? parseInt(req.query.days) : 7;
+        const trends = await dailyReportService.getSentimentTrends(days);
+        res.json(trends);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
+// Unified Library Routes
+// ============================================
+const candidatesLib = require('./libraries/candidates');
+
+// Get all sources combined
+app.get('/api/library/all', async (req, res) => {
+    try {
+        const dateRange = {};
+        if (req.query.date) {
+            dateRange.startDate = req.query.date;
+            dateRange.endDate = req.query.date;
+        }
+
+        const [newsMedia, parties, candidates] = await Promise.all([
+            newsMediaLib.getAllNewsMediaWithSentiment(dateRange),
+            partiesLib.getAllPartiesWithSentiment(dateRange),
+            candidatesLib.getAllCandidatesWithSentiment({ ...req.query, dateRange }) // candidatesLib takes options
+        ]);
+
+        res.json({
+            news_media: newsMedia,
+            political_parties: parties,
+            top_candidates: candidates // Note: getTopCandidatesByEngagement is different, usually for dashboard. Library usually lists all.
+            // Wait, line 874 called getTopCandidatesByEngagement(20). 
+            // The Library UI usually shows a LIST. 
+            // getAllCandidatesWithSentiment returns list.
+            // If /library/all is used for the modal "All" view (if exists) or preloading?
+            // The user wants "all of them". 
+            // The frontend likely calls individual endpoints or this aggregate one?
+            // Existing code (lines 871-874):
+            // newsMediaLib.getAllNewsMediaWithSentiment(),
+            // partiesLib.getAllPartiesWithSentiment(),
+            // candidatesLib.getTopCandidatesByEngagement(20)
+
+            // If I change getTopCandidatesByEngagement to accept dateRange, I need to update THAT function too.
+            // But `candidates.js` (line 105) getTopCandidatesByEngagement(limit=10) doesn't take dateRange.
+            // getAllCandidatesWithSentiment DOES.
+            // If /library/all returns `top_candidates`, maybe it's just for a summary?
+            // I'll stick to updating what's there. 
+            // If `getTopCandidatesByEngagement` doesn't support date, I won't pass it yet, or I'll update it later if needed.
+            // But for `newsMedia` and `parties`, I CAN pass dateRange.
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get news media library
+app.get('/api/library/news-media', async (req, res) => {
+    try {
+        const dateRange = {};
+        if (req.query.date) {
+            dateRange.startDate = req.query.date;
+            dateRange.endDate = req.query.date;
+        }
+        const data = await newsMediaLib.getAllNewsMediaWithSentiment(dateRange);
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get parties library
+app.get('/api/library/parties', async (req, res) => {
+    try {
+        const dateRange = {};
+        if (req.query.date) {
+            dateRange.startDate = req.query.date;
+            dateRange.endDate = req.query.date;
+        }
+        const data = await partiesLib.getAllPartiesWithSentiment(dateRange);
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get candidates library (enhanced)
+app.get('/api/library/candidates', async (req, res) => {
+    try {
+        const limit = req.query.limit ? parseInt(req.query.limit) : 50;
+        const dateRange = req.query.date ? { startDate: req.query.date, endDate: req.query.date } : null;
+
+        const data = await candidatesLib.getAllCandidatesWithSentiment({ limit, dateRange });
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
 // Serve frontend
 // ============================================
+
+// Route for reports page
+app.get('/reports.html', (req, res) => {
+    res.sendFile('reports.html', { root: './public' });
+});
+
+// Route for sources page
+app.get('/sources.html', (req, res) => {
+    res.sendFile('sources.html', { root: './public' });
+});
+
 app.get('*', (req, res) => {
     // For any unknown routes, redirect to login
     res.redirect('/');
