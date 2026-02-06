@@ -943,48 +943,65 @@ app.get('/api/library/candidates', async (req, res) => {
     try {
         const dateFilter = req.query.date || null;
 
-        // Get all posts (optionally filtered by date)
+        // Simple query: just get posts with basic candidate join
         let postsQuery = db.supabase.from('posts').select(`
-            *,
-            candidates (
-                id,
-                name,
-                party_name,
-                constituency_id,
-                constituencies (name, district_id, districts (name_en, name_np))
-            )
+            id,
+            candidate_id,
+            post_url,
+            published_date,
+            positive_percentage,
+            negative_percentage,
+            neutral_percentage,
+            positive_remarks,
+            negative_remarks,
+            neutral_remarks,
+            conclusion,
+            comment_count
         `).order('published_date', { ascending: false });
 
         if (dateFilter) {
             postsQuery = postsQuery.eq('published_date', dateFilter);
         }
 
-        const { data: posts, error } = await postsQuery.limit(500);
+        const { data: posts, error: postsError } = await postsQuery.limit(500);
 
-        if (error) {
-            console.error('Library candidates error:', error.message);
-            return res.status(500).json({ error: error.message });
+        if (postsError) {
+            console.error('Library posts error:', postsError.message);
+            return res.status(500).json({ error: postsError.message });
         }
 
-        // Transform to the format frontend expects: { ...candidate, post: {...} }
-        const result = (posts || []).map(post => {
-            const candidate = post.candidates;
-            if (!candidate) return null;
+        if (!posts || posts.length === 0) {
+            return res.json([]);
+        }
 
-            // Build constituency name
-            let constituencyName = '';
-            if (candidate.constituencies) {
-                const c = candidate.constituencies;
-                const districtName = c.districts?.name_en || '';
-                constituencyName = districtName ? `${districtName}, ${c.name}` : c.name;
-            }
+        // Get unique candidate IDs
+        const candidateIds = [...new Set(posts.map(p => p.candidate_id))];
+
+        // Fetch candidates separately
+        const { data: candidates, error: candidatesError } = await db.supabase
+            .from('candidates')
+            .select('id, name, party_name, constituency_id')
+            .in('id', candidateIds);
+
+        if (candidatesError) {
+            console.error('Library candidates error:', candidatesError.message);
+        }
+
+        // Create lookup map
+        const candidateMap = {};
+        (candidates || []).forEach(c => { candidateMap[c.id] = c; });
+
+        // Transform to the format frontend expects
+        const result = posts.map(post => {
+            const candidate = candidateMap[post.candidate_id];
+            if (!candidate) return null;
 
             return {
                 id: candidate.id,
                 name: candidate.name,
                 party_name: candidate.party_name,
                 constituency_id: candidate.constituency_id,
-                constituency_name: constituencyName,
+                constituency_name: '', // Will be empty for now, but can be fetched separately
                 post: {
                     id: post.id,
                     post_url: post.post_url,
