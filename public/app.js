@@ -397,7 +397,7 @@ async function loadDistricts(provinceId, targetSelect, districtSelect, constitue
     }
 
     try {
-        const districts = await API.get(`/ districts / ${provinceId} `);
+        const districts = await API.get(`/districts/${provinceId}`);
         populateSelect(districtSelect, districts, 'name_en');
         districtSelect.disabled = false;
         resetSelect(constituencySelect, 'Select Constituency');
@@ -415,7 +415,7 @@ async function loadConstituencies(districtId, constituencySelect) {
     }
 
     try {
-        const constituencies = await API.get(`/ constituencies / ${districtId} `);
+        const constituencies = await API.get(`/constituencies/${districtId}`);
         populateSelect(constituencySelect, constituencies, 'name');
         constituencySelect.disabled = false;
     } catch (error) {
