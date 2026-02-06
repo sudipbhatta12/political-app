@@ -165,6 +165,7 @@ async function initSessionTable() {
 
 // Export module functions
 module.exports = {
+    supabase,
     initDatabase,
 
     // Session Management
