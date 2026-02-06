@@ -938,18 +938,76 @@ app.get('/api/library/parties', async (req, res) => {
     }
 });
 
-// Get candidates library (enhanced)
+// Get candidates library (enhanced) - Returns candidates with their latest post
 app.get('/api/library/candidates', async (req, res) => {
     try {
-        const limit = req.query.limit ? parseInt(req.query.limit) : 50;
-        const dateRange = req.query.date ? { startDate: req.query.date, endDate: req.query.date } : null;
+        const dateFilter = req.query.date || null;
 
-        const data = await candidatesLib.getAllCandidatesWithSentiment({ limit, dateRange });
-        res.json(data);
+        // Get all posts (optionally filtered by date)
+        let postsQuery = db.supabase.from('posts').select(`
+            *,
+            candidates (
+                id,
+                name,
+                party_name,
+                constituency_id,
+                constituencies (name, district_id, districts (name_en, name_np))
+            )
+        `).order('published_date', { ascending: false });
+
+        if (dateFilter) {
+            postsQuery = postsQuery.eq('published_date', dateFilter);
+        }
+
+        const { data: posts, error } = await postsQuery.limit(500);
+
+        if (error) {
+            console.error('Library candidates error:', error.message);
+            return res.status(500).json({ error: error.message });
+        }
+
+        // Transform to the format frontend expects: { ...candidate, post: {...} }
+        const result = (posts || []).map(post => {
+            const candidate = post.candidates;
+            if (!candidate) return null;
+
+            // Build constituency name
+            let constituencyName = '';
+            if (candidate.constituencies) {
+                const c = candidate.constituencies;
+                const districtName = c.districts?.name_en || '';
+                constituencyName = districtName ? `${districtName}, ${c.name}` : c.name;
+            }
+
+            return {
+                id: candidate.id,
+                name: candidate.name,
+                party_name: candidate.party_name,
+                constituency_id: candidate.constituency_id,
+                constituency_name: constituencyName,
+                post: {
+                    id: post.id,
+                    post_url: post.post_url,
+                    published_date: post.published_date,
+                    positive_percentage: post.positive_percentage || 0,
+                    negative_percentage: post.negative_percentage || 0,
+                    neutral_percentage: post.neutral_percentage || 0,
+                    positive_remarks: post.positive_remarks,
+                    negative_remarks: post.negative_remarks,
+                    neutral_remarks: post.neutral_remarks,
+                    conclusion: post.conclusion,
+                    comment_count: post.comment_count || 0
+                }
+            };
+        }).filter(Boolean);
+
+        res.json(result);
     } catch (error) {
+        console.error('Library candidates error:', error);
         res.status(500).json({ error: error.message });
     }
 });
+
 
 // ============================================
 // Serve frontend
