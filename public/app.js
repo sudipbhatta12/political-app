@@ -458,7 +458,13 @@ function populateSelect(select, items, labelKey) {
         option.textContent = item[labelKey];
         select.appendChild(option);
     });
-    if (currentValue) select.value = currentValue;
+
+    // Only restore selection if the value still exists in the new options
+    if (currentValue && items.some(item => String(item.id) === String(currentValue))) {
+        select.value = currentValue;
+    } else {
+        select.value = ""; // Default to empty/placeholder
+    }
 }
 
 function resetSelect(select, placeholder) {
@@ -2213,7 +2219,6 @@ function initEventListeners() {
     });
 
     // Library Filter
-    // Library Filter
     elements.libraryDateFilter.addEventListener('change', (e) => {
         if (e.target.value) {
             elements.clearLibraryFilter.style.display = 'flex';
@@ -3243,7 +3248,7 @@ async function generateDailyReport() {
 
         if (!response.ok) {
             const err = await response.json();
-            throw new Error(err.error || 'Failed to generate report');
+            throw new Error(err.error || err.message || 'Failed to generate report');
         }
 
         const report = await response.json();
