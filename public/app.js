@@ -3248,6 +3248,32 @@ async function generateDailyReport() {
 
         if (!response.ok) {
             const err = await response.json();
+
+            // Handle missing table error specifically
+            if (err.error_code === 'MISSING_TABLE') {
+                const remarksModal = document.getElementById('remarksModal');
+                const remarksTitle = document.getElementById('remarksTitle');
+                const remarksContent = document.getElementById('remarksContent');
+
+                if (remarksModal && remarksTitle && remarksContent) {
+                    remarksTitle.textContent = '⚠️ Database Setup Required';
+                    remarksContent.innerHTML = `
+                        <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                            <p style="margin-top: 0; color: #fca5a5; font-weight: 500;">The 'daily_reports' table is missing from your database.</p>
+                            <p style="margin-bottom: 0; color: #cbd5e1; font-size: 0.9em;">Please run the following SQL script in your Supabase SQL Editor to fix this issue:</p>
+                        </div>
+                        <div style="position: relative;">
+                            <textarea readonly style="width: 100%; height: 300px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 12px; color: #a5f3fc; font-family: monospace; font-size: 12px; resize: none;">${err.sql}</textarea>
+                            <button onclick="navigator.clipboard.writeText(this.previousElementSibling.value); this.textContent='Copied!'" style="position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,0.1); border: none; padding: 4px 8px; border-radius: 4px; color: white; cursor: pointer; font-size: 11px;">Copy SQL</button>
+                        </div>
+                    `;
+                    remarksModal.classList.add('active');
+                    loading.style.display = 'none';
+                    if (status) status.textContent = 'Setup required';
+                    return;
+                }
+            }
+
             throw new Error(err.error || err.message || 'Failed to generate report');
         }
 

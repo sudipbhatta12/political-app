@@ -371,6 +371,54 @@ module.exports = {
                 .single();
 
             if (error) {
+                // Check if error is due to missing table
+                if (error.message.includes('relation "public.daily_reports" does not exist') ||
+                    error.code === '42P01') {
+                    return {
+                        success: false,
+                        error_code: 'MISSING_TABLE',
+                        message: 'Database not initialized',
+                        sql: `CREATE TABLE IF NOT EXISTS daily_reports (
+    id SERIAL PRIMARY KEY,
+    report_date DATE NOT NULL UNIQUE,
+    total_posts_analyzed INTEGER DEFAULT 0,
+    total_comments_analyzed INTEGER DEFAULT 0,
+    total_sources INTEGER DEFAULT 0,
+    overall_positive REAL DEFAULT 0,
+    overall_negative REAL DEFAULT 0,
+    overall_neutral REAL DEFAULT 0,
+    summary_text TEXT,
+    generated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS report_summaries (
+    id SERIAL PRIMARY KEY,
+    report_id INTEGER NOT NULL REFERENCES daily_reports(id) ON DELETE CASCADE,
+    source_type TEXT CHECK (source_type = ANY (ARRAY['candidate'::text, 'news_media'::text, 'political_party'::text])),
+    source_id INTEGER,
+    source_name TEXT,
+    total_posts INTEGER DEFAULT 0,
+    total_comments INTEGER DEFAULT 0,
+    avg_positive REAL DEFAULT 0,
+    avg_negative REAL DEFAULT 0,
+    avg_neutral REAL DEFAULT 0,
+    key_topics TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE daily_reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE report_summaries ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "allow_public_read_daily_reports" ON daily_reports FOR SELECT USING (true);
+CREATE POLICY "allow_public_read_report_summaries" ON report_summaries FOR SELECT USING (true);
+CREATE POLICY "allow_insert_daily_reports" ON daily_reports FOR INSERT WITH CHECK (true);
+CREATE POLICY "allow_update_daily_reports" ON daily_reports FOR UPDATE USING (true);
+CREATE POLICY "allow_insert_report_summaries" ON report_summaries FOR INSERT WITH CHECK (true);
+CREATE POLICY "allow_delete_report_summaries" ON report_summaries FOR DELETE USING (true);`
+                    };
+                }
+
                 console.error('Create report error:', error.message);
                 return { success: false, message: error.message };
             }
