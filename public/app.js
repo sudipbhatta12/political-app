@@ -557,7 +557,7 @@ async function loadCandidatesByConstituency(constituencyId, date = null, filterB
 
 async function loadConstituencyDates(constituencyId) {
     try {
-        const dates = await API.get(`/ constituency / ${constituencyId}/dates`);
+        const dates = await API.get(`/constituency/${constituencyId}/dates`);
         state.availableDates = dates;
         state.currentDateIndex = 0; // Reset to newest
 
