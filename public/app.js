@@ -542,8 +542,8 @@ async function loadCandidatesByConstituency(constituencyId, date = null, filterB
 
     try {
         const query = dateToFetch
-            ? `/ candidates ? constituency_id = ${constituencyId}& date=${dateToFetch} `
-            : `/ candidates ? constituency_id = ${constituencyId} `;
+            ? `/candidates?constituency_id=${constituencyId}&date=${dateToFetch}`
+            : `/candidates?constituency_id=${constituencyId}`;
 
         state.candidates = await API.get(query);
         renderCandidateCards();
@@ -3004,7 +3004,7 @@ async function handleNewsArticleSubmit(e) {
     };
 
     try {
-        const res = await fetch('/api/media-posts', {
+        const res = await fetch(`/api/news-media/${sourceId}/posts`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -3107,7 +3107,7 @@ async function handlePartyPostSubmit(e) {
     };
 
     try {
-        const res = await fetch('/api/media-posts', {
+        const res = await fetch(`/api/parties/${partyId}/posts`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
