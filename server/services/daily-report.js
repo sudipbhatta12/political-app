@@ -41,7 +41,8 @@ async function getPostsForDate(date) {
     const { data, error } = await supabase
         .from('media_posts')
         .select('*')
-        .eq('published_date', date);
+        .gte('published_date', `${date}T00:00:00`)
+        .lte('published_date', `${date}T23:59:59`);
 
     if (error) {
         console.error('getPostsForDate error:', error.message);
@@ -60,7 +61,8 @@ async function getCandidatePostsForDate(date) {
             *,
             candidates (id, name, party_name)
         `)
-        .eq('published_date', date);
+        .gte('published_date', `${date}T00:00:00`)
+        .lte('published_date', `${date}T23:59:59`);
 
     if (error) {
         console.error('getCandidatePostsForDate error:', error.message);
@@ -585,5 +587,23 @@ CREATE POLICY "allow_delete_report_summaries" ON report_summaries FOR DELETE USI
                 }
             ]
         };
+    },
+
+    /**
+     * Delete a report by ID
+     */
+    deleteReport: async (id) => {
+        // Summaries are deleted via CASCADE
+        const { error } = await supabase
+            .from('daily_reports')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            console.error('deleteReport error:', error.message);
+            return { success: false, message: error.message };
+        }
+
+        return { success: true };
     }
 };

@@ -27,6 +27,9 @@ class DailyReportComponent {
                         <button id="generate-report-btn" class="btn btn-primary">
                             <span class="btn-icon">⚡</span> Generate Report
                         </button>
+                        <button id="delete-report-btn" class="btn btn-danger" style="display: none; margin-left: 8px; background: rgba(239, 68, 68, 0.1); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.2);">
+                            <span class="btn-icon">🗑️</span> Delete
+                        </button>
                     </div>
                 </div>
 
@@ -148,6 +151,13 @@ class DailyReportComponent {
             this.generateReport(date);
         });
 
+        // Delete button
+        document.getElementById('delete-report-btn').addEventListener('click', () => {
+            if (confirm('Are you sure you want to delete this report? This action cannot be undone.')) {
+                this.deleteCurrentReport();
+            }
+        });
+
         // Source tabs
         document.querySelectorAll('.source-tab').forEach(tab => {
             tab.addEventListener('click', (e) => {
@@ -216,10 +226,37 @@ class DailyReportComponent {
         }
     }
 
+    async deleteCurrentReport() {
+        if (!this.currentReport || !this.currentReport.id) return;
+
+        try {
+            const response = await fetch(`/api/reports/${this.currentReport.id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                alert('Report deleted successfully');
+                this.currentReport = null;
+                // Reload current date (which should now show no data)
+                const date = document.getElementById('report-date-picker').value;
+                this.loadReportByDate(date);
+            } else {
+                alert(result.message || 'Failed to delete report');
+            }
+        } catch (error) {
+            console.error('Error deleting report:', error);
+            alert('Error deleting report');
+        }
+    }
+
     displayReport(report) {
         document.getElementById('report-loading').style.display = 'none';
         document.getElementById('report-no-data').style.display = 'none';
         document.getElementById('report-content').style.display = 'block';
+        document.getElementById('delete-report-btn').style.display = 'inline-flex';
 
         // Update summary cards
         document.getElementById('total-posts').textContent = report.total_posts_analyzed?.toLocaleString() || '0';
@@ -391,6 +428,7 @@ class DailyReportComponent {
         document.getElementById('report-loading').style.display = 'none';
         document.getElementById('report-no-data').style.display = 'flex';
         document.getElementById('report-content').style.display = 'none';
+        document.getElementById('delete-report-btn').style.display = 'none';
     }
 }
 

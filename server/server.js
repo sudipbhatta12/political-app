@@ -805,17 +805,19 @@ app.get('/api/reports/daily', async (req, res) => {
     }
 });
 
-// Get report by date
+// Get report for specific date
 app.get('/api/reports/daily/:date', async (req, res) => {
     try {
-        const report = await dailyReportService.getReportByDate(req.params.date);
+        const { date } = req.params;
+        const report = await dailyReportService.getReportByDate(date);
 
         if (report) {
             res.json(report);
         } else {
             res.status(404).json({
                 message: 'No report found for this date',
-                report_date: req.params.date
+                report_date: date,
+                exists: false
             });
         }
     } catch (error) {
@@ -827,124 +829,138 @@ app.get('/api/reports/daily/:date', async (req, res) => {
 app.get('/api/reports/history', async (req, res) => {
     try {
         const limit = req.query.limit ? parseInt(req.query.limit) : 30;
-        const reports = await dailyReportService.getReportHistory(limit);
-        res.json(reports);
+        const history = await dailyReportService.getReportHistory(limit);
+        res.json(history);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-// Get chart data for a report
-app.get('/api/reports/:id/charts', async (req, res) => {
+// Delete report
+app.delete('/api/reports/:id', async (req, res) => {
     try {
-        const chartData = await dailyReportService.getChartData(parseInt(req.params.id));
-
-        if (chartData) {
-            res.json(chartData);
+        const result = await dailyReportService.deleteReport(parseInt(req.params.id));
+        if (result.success) {
+            res.json(result);
         } else {
-            res.status(404).json({ error: 'Report not found' });
+            res.status(500).json(result);
         }
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
-});
 
-// Get sentiment trends
-app.get('/api/reports/trends', async (req, res) => {
-    try {
-        const days = req.query.days ? parseInt(req.query.days) : 7;
-        const trends = await dailyReportService.getSentimentTrends(days);
-        res.json(trends);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
 
-// ============================================
-// Unified Library Routes
-// ============================================
-const candidatesLib = require('./libraries/candidates');
+    // Get chart data for a report
+    app.get('/api/reports/:id/charts', async (req, res) => {
+        try {
+            const chartData = await dailyReportService.getChartData(parseInt(req.params.id));
 
-// Get all sources combined
-app.get('/api/library/all', async (req, res) => {
-    try {
-        const dateRange = {};
-        if (req.query.date) {
-            dateRange.startDate = req.query.date;
-            dateRange.endDate = req.query.date;
+            if (chartData) {
+                res.json(chartData);
+            } else {
+                res.status(404).json({ error: 'Report not found' });
+            }
+        } catch (error) {
+            res.status(500).json({ error: error.message });
         }
+    });
 
-        const [newsMedia, parties, candidates] = await Promise.all([
-            newsMediaLib.getAllNewsMediaWithSentiment(dateRange),
-            partiesLib.getAllPartiesWithSentiment(dateRange),
-            candidatesLib.getAllCandidatesWithSentiment({ ...req.query, dateRange }) // candidatesLib takes options
-        ]);
-
-        res.json({
-            news_media: newsMedia,
-            political_parties: parties,
-            top_candidates: candidates // Note: getTopCandidatesByEngagement is different, usually for dashboard. Library usually lists all.
-            // Wait, line 874 called getTopCandidatesByEngagement(20). 
-            // The Library UI usually shows a LIST. 
-            // getAllCandidatesWithSentiment returns list.
-            // If /library/all is used for the modal "All" view (if exists) or preloading?
-            // The user wants "all of them". 
-            // The frontend likely calls individual endpoints or this aggregate one?
-            // Existing code (lines 871-874):
-            // newsMediaLib.getAllNewsMediaWithSentiment(),
-            // partiesLib.getAllPartiesWithSentiment(),
-            // candidatesLib.getTopCandidatesByEngagement(20)
-
-            // If I change getTopCandidatesByEngagement to accept dateRange, I need to update THAT function too.
-            // But `candidates.js` (line 105) getTopCandidatesByEngagement(limit=10) doesn't take dateRange.
-            // getAllCandidatesWithSentiment DOES.
-            // If /library/all returns `top_candidates`, maybe it's just for a summary?
-            // I'll stick to updating what's there. 
-            // If `getTopCandidatesByEngagement` doesn't support date, I won't pass it yet, or I'll update it later if needed.
-            // But for `newsMedia` and `parties`, I CAN pass dateRange.
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Get news media library
-app.get('/api/library/news-media', async (req, res) => {
-    try {
-        const dateRange = {};
-        if (req.query.date) {
-            dateRange.startDate = req.query.date;
-            dateRange.endDate = req.query.date;
+    // Get sentiment trends
+    app.get('/api/reports/trends', async (req, res) => {
+        try {
+            const days = req.query.days ? parseInt(req.query.days) : 7;
+            const trends = await dailyReportService.getSentimentTrends(days);
+            res.json(trends);
+        } catch (error) {
+            res.status(500).json({ error: error.message });
         }
-        const data = await newsMediaLib.getAllNewsMediaWithSentiment(dateRange);
-        res.json(data);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
+    });
 
-// Get parties library
-app.get('/api/library/parties', async (req, res) => {
-    try {
-        const dateRange = {};
-        if (req.query.date) {
-            dateRange.startDate = req.query.date;
-            dateRange.endDate = req.query.date;
+    // ============================================
+    // Unified Library Routes
+    // ============================================
+    const candidatesLib = require('./libraries/candidates');
+
+    // Get all sources combined
+    app.get('/api/library/all', async (req, res) => {
+        try {
+            const dateRange = {};
+            if (req.query.date) {
+                dateRange.startDate = req.query.date;
+                dateRange.endDate = req.query.date;
+            }
+
+            const [newsMedia, parties, candidates] = await Promise.all([
+                newsMediaLib.getAllNewsMediaWithSentiment(dateRange),
+                partiesLib.getAllPartiesWithSentiment(dateRange),
+                candidatesLib.getAllCandidatesWithSentiment({ ...req.query, dateRange }) // candidatesLib takes options
+            ]);
+
+            res.json({
+                news_media: newsMedia,
+                political_parties: parties,
+                top_candidates: candidates // Note: getTopCandidatesByEngagement is different, usually for dashboard. Library usually lists all.
+                // Wait, line 874 called getTopCandidatesByEngagement(20). 
+                // The Library UI usually shows a LIST. 
+                // getAllCandidatesWithSentiment returns list.
+                // If /library/all is used for the modal "All" view (if exists) or preloading?
+                // The user wants "all of them". 
+                // The frontend likely calls individual endpoints or this aggregate one?
+                // Existing code (lines 871-874):
+                // newsMediaLib.getAllNewsMediaWithSentiment(),
+                // partiesLib.getAllPartiesWithSentiment(),
+                // candidatesLib.getTopCandidatesByEngagement(20)
+
+                // If I change getTopCandidatesByEngagement to accept dateRange, I need to update THAT function too.
+                // But `candidates.js` (line 105) getTopCandidatesByEngagement(limit=10) doesn't take dateRange.
+                // getAllCandidatesWithSentiment DOES.
+                // If /library/all returns `top_candidates`, maybe it's just for a summary?
+                // I'll stick to updating what's there. 
+                // If `getTopCandidatesByEngagement` doesn't support date, I won't pass it yet, or I'll update it later if needed.
+                // But for `newsMedia` and `parties`, I CAN pass dateRange.
+            });
+        } catch (error) {
+            res.status(500).json({ error: error.message });
         }
-        const data = await partiesLib.getAllPartiesWithSentiment(dateRange);
-        res.json(data);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
+    });
 
-// Get candidates library (enhanced) - Returns candidates with their latest post
-app.get('/api/library/candidates', async (req, res) => {
-    try {
-        const dateFilter = req.query.date || null;
+    // Get news media library
+    app.get('/api/library/news-media', async (req, res) => {
+        try {
+            const dateRange = {};
+            if (req.query.date) {
+                dateRange.startDate = req.query.date;
+                dateRange.endDate = req.query.date;
+            }
+            const data = await newsMediaLib.getAllNewsMediaWithSentiment(dateRange);
+            res.json(data);
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
+    });
 
-        // Simple query: just get posts with basic candidate join
-        let postsQuery = db.supabase.from('posts').select(`
+    // Get parties library
+    app.get('/api/library/parties', async (req, res) => {
+        try {
+            const dateRange = {};
+            if (req.query.date) {
+                dateRange.startDate = req.query.date;
+                dateRange.endDate = req.query.date;
+            }
+            const data = await partiesLib.getAllPartiesWithSentiment(dateRange);
+            res.json(data);
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
+    });
+
+    // Get candidates library (enhanced) - Returns candidates with their latest post
+    app.get('/api/library/candidates', async (req, res) => {
+        try {
+            const dateFilter = req.query.date || null;
+
+            // Simple query: just get posts with basic candidate join
+            let postsQuery = db.supabase.from('posts').select(`
             id,
             candidate_id,
             post_url,
@@ -959,113 +975,113 @@ app.get('/api/library/candidates', async (req, res) => {
             comment_count
         `).order('published_date', { ascending: false });
 
-        if (dateFilter) {
-            postsQuery = postsQuery.eq('published_date', dateFilter);
+            if (dateFilter) {
+                postsQuery = postsQuery.eq('published_date', dateFilter);
+            }
+
+            const { data: posts, error: postsError } = await postsQuery.limit(500);
+
+            if (postsError) {
+                console.error('Library posts error:', postsError.message);
+                return res.status(500).json({ error: postsError.message });
+            }
+
+            if (!posts || posts.length === 0) {
+                return res.json([]);
+            }
+
+            // Get unique candidate IDs
+            const candidateIds = [...new Set(posts.map(p => p.candidate_id))];
+
+            // Fetch candidates separately
+            const { data: candidates, error: candidatesError } = await db.supabase
+                .from('candidates')
+                .select('id, name, party_name, constituency_id')
+                .in('id', candidateIds);
+
+            if (candidatesError) {
+                console.error('Library candidates error:', candidatesError.message);
+            }
+
+            // Create lookup map
+            const candidateMap = {};
+            (candidates || []).forEach(c => { candidateMap[c.id] = c; });
+
+            // Transform to the format frontend expects
+            const result = posts.map(post => {
+                const candidate = candidateMap[post.candidate_id];
+                if (!candidate) return null;
+
+                return {
+                    id: candidate.id,
+                    name: candidate.name,
+                    party_name: candidate.party_name,
+                    constituency_id: candidate.constituency_id,
+                    constituency_name: '', // Will be empty for now, but can be fetched separately
+                    post: {
+                        id: post.id,
+                        post_url: post.post_url,
+                        published_date: post.published_date,
+                        positive_percentage: post.positive_percentage || 0,
+                        negative_percentage: post.negative_percentage || 0,
+                        neutral_percentage: post.neutral_percentage || 0,
+                        positive_remarks: post.positive_remarks,
+                        negative_remarks: post.negative_remarks,
+                        neutral_remarks: post.neutral_remarks,
+                        conclusion: post.conclusion,
+                        comment_count: post.comment_count || 0
+                    }
+                };
+            }).filter(Boolean);
+
+            res.json(result);
+        } catch (error) {
+            console.error('Library candidates error:', error);
+            res.status(500).json({ error: error.message });
         }
-
-        const { data: posts, error: postsError } = await postsQuery.limit(500);
-
-        if (postsError) {
-            console.error('Library posts error:', postsError.message);
-            return res.status(500).json({ error: postsError.message });
-        }
-
-        if (!posts || posts.length === 0) {
-            return res.json([]);
-        }
-
-        // Get unique candidate IDs
-        const candidateIds = [...new Set(posts.map(p => p.candidate_id))];
-
-        // Fetch candidates separately
-        const { data: candidates, error: candidatesError } = await db.supabase
-            .from('candidates')
-            .select('id, name, party_name, constituency_id')
-            .in('id', candidateIds);
-
-        if (candidatesError) {
-            console.error('Library candidates error:', candidatesError.message);
-        }
-
-        // Create lookup map
-        const candidateMap = {};
-        (candidates || []).forEach(c => { candidateMap[c.id] = c; });
-
-        // Transform to the format frontend expects
-        const result = posts.map(post => {
-            const candidate = candidateMap[post.candidate_id];
-            if (!candidate) return null;
-
-            return {
-                id: candidate.id,
-                name: candidate.name,
-                party_name: candidate.party_name,
-                constituency_id: candidate.constituency_id,
-                constituency_name: '', // Will be empty for now, but can be fetched separately
-                post: {
-                    id: post.id,
-                    post_url: post.post_url,
-                    published_date: post.published_date,
-                    positive_percentage: post.positive_percentage || 0,
-                    negative_percentage: post.negative_percentage || 0,
-                    neutral_percentage: post.neutral_percentage || 0,
-                    positive_remarks: post.positive_remarks,
-                    negative_remarks: post.negative_remarks,
-                    neutral_remarks: post.neutral_remarks,
-                    conclusion: post.conclusion,
-                    comment_count: post.comment_count || 0
-                }
-            };
-        }).filter(Boolean);
-
-        res.json(result);
-    } catch (error) {
-        console.error('Library candidates error:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-
-// ============================================
-// Serve frontend
-// ============================================
-
-// Route for reports page
-app.get('/reports.html', (req, res) => {
-    res.sendFile('reports.html', { root: './public' });
-});
-
-// Route for sources page
-app.get('/sources.html', (req, res) => {
-    res.sendFile('sources.html', { root: './public' });
-});
-
-app.get('*', (req, res) => {
-    // For any unknown routes, redirect to login
-    res.redirect('/');
-});
-
-// ============================================
-// Start server
-// ============================================
-async function startServer() {
-    // 1. Start listening IMMEDIATELY to satisfy Cloud Run health checks
-    const server = app.listen(PORT, '0.0.0.0', () => {
-        console.log('╔════════════════════════════════════════════════════════════╗');
-        console.log('║     POLITICAL SOCIAL MEDIA ASSESSMENT - SERVER STARTED     ║');
-        console.log('╠════════════════════════════════════════════════════════════╣');
-        console.log(`║  Local:   http://localhost:${PORT}                           ║`);
-        console.log(`║  Port:    ${PORT}                                            ║`);
-        console.log('╚════════════════════════════════════════════════════════════╝');
     });
 
-    // 2. Initialize database in background
-    try {
-        console.log('🔄 Connecting to Database...');
-        await db.initDatabase();
-    } catch (error) {
-        console.error('❌ Database initialization failed:', error);
-    }
-}
 
-startServer();
+    // ============================================
+    // Serve frontend
+    // ============================================
+
+    // Route for reports page
+    app.get('/reports.html', (req, res) => {
+        res.sendFile('reports.html', { root: './public' });
+    });
+
+    // Route for sources page
+    app.get('/sources.html', (req, res) => {
+        res.sendFile('sources.html', { root: './public' });
+    });
+
+    app.get('*', (req, res) => {
+        // For any unknown routes, redirect to login
+        res.redirect('/');
+    });
+
+    // ============================================
+    // Start server
+    // ============================================
+    async function startServer() {
+        // 1. Start listening IMMEDIATELY to satisfy Cloud Run health checks
+        const server = app.listen(PORT, '0.0.0.0', () => {
+            console.log('╔════════════════════════════════════════════════════════════╗');
+            console.log('║     POLITICAL SOCIAL MEDIA ASSESSMENT - SERVER STARTED     ║');
+            console.log('╠════════════════════════════════════════════════════════════╣');
+            console.log(`║  Local:   http://localhost:${PORT}                           ║`);
+            console.log(`║  Port:    ${PORT}                                            ║`);
+            console.log('╚════════════════════════════════════════════════════════════╝');
+        });
+
+        // 2. Initialize database in background
+        try {
+            console.log('🔄 Connecting to Database...');
+            await db.initDatabase();
+        } catch (error) {
+            console.error('❌ Database initialization failed:', error);
+        }
+    }
+
+    startServer();
