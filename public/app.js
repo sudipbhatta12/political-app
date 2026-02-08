@@ -2845,10 +2845,11 @@ function closeAIModal() {
 async function handleAISubmit(e) {
     e.preventDefault();
 
-    const candidateId = elements.aiCandidateSelect.value;
+    const sourceType = elements.aiSourceType ? elements.aiSourceType.value : 'candidate';
     const files = elements.aiFile.files;
 
-    if (!candidateId) {
+    // Validate based on type
+    if (sourceType === 'candidate' && !elements.aiCandidateSelect.value) {
         showToast('Please select a candidate', 'error');
         return;
     }
@@ -3324,6 +3325,12 @@ async function handleNewsArticleSubmit(e) {
         remarks: document.getElementById('newsRemarks')?.value || ''
     };
 
+    // Show loading state
+    const submitBtn = elements.addSourceSubmitBtn;
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Saving...';
+
     try {
         const res = await fetch(`/api/news-media/${sourceId}/posts`, {
             method: 'POST',
@@ -3339,6 +3346,9 @@ async function handleNewsArticleSubmit(e) {
         closeAddSourceModal();
     } catch (err) {
         showToast('Failed to save article: ' + err.message, 'error');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
     }
 }
 
@@ -3393,6 +3403,12 @@ async function handlePartyPostSubmit(e) {
         remarks: document.getElementById('partyRemarks')?.value || ''
     };
 
+    // Show loading state
+    const submitBtn = elements.addSourceSubmitBtn;
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Saving...';
+
     try {
         const res = await fetch(`/api/parties/${partyId}/posts`, {
             method: 'POST',
@@ -3408,6 +3424,9 @@ async function handlePartyPostSubmit(e) {
         closeAddSourceModal();
     } catch (err) {
         showToast('Failed to save post: ' + err.message, 'error');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
     }
 }
 
