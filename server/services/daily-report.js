@@ -41,8 +41,7 @@ async function getPostsForDate(date) {
     const { data, error } = await supabase
         .from('media_posts')
         .select('*')
-        .gte('published_date', `${date}T00:00:00`)
-        .lte('published_date', `${date}T23:59:59`);
+        .ilike('published_date', `${date}%`);
 
     if (error) {
         console.error('getPostsForDate error:', error.message);
@@ -61,8 +60,7 @@ async function getCandidatePostsForDate(date) {
             *,
             candidates (id, name, party_name)
         `)
-        .gte('published_date', `${date}T00:00:00`)
-        .lte('published_date', `${date}T23:59:59`);
+        .ilike('published_date', `${date}%`);
 
     if (error) {
         console.error('getCandidatePostsForDate error:', error.message);
@@ -128,6 +126,7 @@ async function generateAISummary(reportData) {
     }
 
     try {
+        console.log('🤖 Attempting to generate AI summary with Gemini...');
         const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
         const prompt = `You are a political analyst generating a daily sentiment report for Nepal's political landscape.
@@ -168,6 +167,7 @@ Keep it factual and balanced. Write in English.`;
  * Fallback algorithmic summary when AI is unavailable
  */
 function generateAlgorithmicSummary(reportData) {
+    console.log('⚠️ Using Fallback Algorithmic Summary');
     const { overall_positive, overall_negative, overall_neutral, total_posts_analyzed, total_comments_analyzed } = reportData;
 
     let sentimentTrend = 'neutral';

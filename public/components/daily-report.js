@@ -8,12 +8,22 @@ class DailyReportComponent {
         this.container = document.getElementById(containerId);
         this.currentReport = null;
         this.charts = {};
+        this.userRole = localStorage.getItem('userRole') || 'viewer';
         this.init();
     }
 
     init() {
         this.render();
         this.loadTodayReport();
+        this.applyRoleRestrictions();
+    }
+
+    applyRoleRestrictions() {
+        if (this.userRole === 'viewer') {
+            // Only hide delete button, allow generate
+            const deleteBtn = document.getElementById('delete-report-btn');
+            if (deleteBtn) deleteBtn.style.display = 'none';
+        }
     }
 
     render() {
@@ -22,6 +32,7 @@ class DailyReportComponent {
                 <!-- Header with Date Selector -->
                 <div class="report-header">
                     <h2 class="report-title">📊 Daily Political Analysis Report</h2>
+                    <div class="report-controls">
                     <div class="report-controls">
                         <input type="date" id="report-date-picker" class="date-picker">
                         <button id="generate-report-btn" class="btn btn-primary">
@@ -146,17 +157,23 @@ class DailyReportComponent {
         datePicker.addEventListener('change', (e) => this.loadReportByDate(e.target.value));
 
         // Generate button
-        document.getElementById('generate-report-btn').addEventListener('click', () => {
-            const date = datePicker.value;
-            this.generateReport(date);
-        });
+        const generateBtn = document.getElementById('generate-report-btn');
+        if (generateBtn) {
+            generateBtn.addEventListener('click', () => {
+                const date = datePicker.value;
+                this.generateReport(date);
+            });
+        }
 
         // Delete button
-        document.getElementById('delete-report-btn').addEventListener('click', () => {
-            if (confirm('Are you sure you want to delete this report? This action cannot be undone.')) {
-                this.deleteCurrentReport();
-            }
-        });
+        const deleteBtn = document.getElementById('delete-report-btn');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', () => {
+                if (confirm('Are you sure you want to delete this report? This action cannot be undone.')) {
+                    this.deleteCurrentReport();
+                }
+            });
+        }
 
         // Source tabs
         document.querySelectorAll('.source-tab').forEach(tab => {
@@ -199,6 +216,9 @@ class DailyReportComponent {
     }
 
     async generateReport(date) {
+        // Viewers allowed to generate reports now
+
+
         this.showLoading();
 
         try {
@@ -227,6 +247,7 @@ class DailyReportComponent {
     }
 
     async deleteCurrentReport() {
+        if (this.userRole === 'viewer') return;
         if (!this.currentReport || !this.currentReport.id) return;
 
         try {
@@ -256,7 +277,11 @@ class DailyReportComponent {
         document.getElementById('report-loading').style.display = 'none';
         document.getElementById('report-no-data').style.display = 'none';
         document.getElementById('report-content').style.display = 'block';
-        document.getElementById('delete-report-btn').style.display = 'inline-flex';
+
+        const deleteBtn = document.getElementById('delete-report-btn');
+        if (deleteBtn) {
+            deleteBtn.style.display = this.userRole === 'viewer' ? 'none' : 'inline-flex';
+        }
 
         // Update summary cards
         document.getElementById('total-posts').textContent = report.total_posts_analyzed?.toLocaleString() || '0';

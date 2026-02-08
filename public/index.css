@@ -795,15 +795,19 @@ a:hover {
    ============================================ */
 
 .modal-overlay {
-    position: fixed;
-    inset: 0;
+    position: fixed !important;
+    inset: 0 !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
     background: rgba(0, 0, 0, 0.75);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    z-index: 9999 !important;
     opacity: 0;
     visibility: hidden;
     transition: all var(--transition-normal);
@@ -814,7 +818,8 @@ a:hover {
     visibility: visible;
 }
 
-.modal {
+.modal-box {
+    position: relative !important;
     background: var(--bg-secondary);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-xl);
@@ -822,13 +827,19 @@ a:hover {
     max-width: 560px;
     max-height: 85vh;
     overflow-y: auto;
-    transform: scale(0.95) translateY(10px);
+    margin: auto !important;
+    transform: scale(0.95);
     transition: transform var(--transition-spring);
     box-shadow: var(--shadow-xl);
 }
 
-.modal-overlay.active .modal {
-    transform: scale(1) translateY(0);
+.modal-box--large {
+    max-width: 900px !important;
+    width: 95% !important;
+}
+
+.modal-overlay.active .modal-box {
+    transform: scale(1);
 }
 
 .modal__header {
@@ -2171,4 +2182,28 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 
 .nav-item:active {
     transform: translateY(0);
-}
+}/ *   P r e m i u m   L o g o u t   B u t t o n   * /  
+ . b t n - - l o g o u t   {  
+         d i s p l a y :   f l e x ;  
+         a l i g n - i t e m s :   c e n t e r ;  
+         g a p :   8 p x ;  
+         p a d d i n g :   8 p x   1 6 p x ;  
+         b a c k g r o u n d :   r g b a ( 2 5 5 ,   6 9 ,   5 8 ,   0 . 1 ) ;  
+         b o r d e r :   1 p x   s o l i d   r g b a ( 2 5 5 ,   6 9 ,   5 8 ,   0 . 2 ) ;  
+         c o l o r :   # f f 4 5 3 a ;  
+         b o r d e r - r a d i u s :   2 0 p x ;  
+         f o n t - w e i g h t :   5 0 0 ;  
+         t r a n s i t i o n :   a l l   0 . 3 s   e a s e ;  
+ }  
+  
+ . b t n - - l o g o u t : h o v e r   {  
+         b a c k g r o u n d :   r g b a ( 2 5 5 ,   6 9 ,   5 8 ,   0 . 2 ) ;  
+         t r a n s f o r m :   t r a n s l a t e Y ( - 1 p x ) ;  
+         b o x - s h a d o w :   0   4 p x   1 2 p x   r g b a ( 2 5 5 ,   6 9 ,   5 8 ,   0 . 2 ) ;  
+ }  
+  
+ . b t n - - l o g o u t   i   {  
+         w i d t h :   1 6 p x ;  
+         h e i g h t :   1 6 p x ;  
+ }  
+ 

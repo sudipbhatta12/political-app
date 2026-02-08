@@ -89,6 +89,7 @@ const state = {
 const elements = {
     // Header
     homeBtn: document.getElementById('homeBtn'),
+    brandLogoBtn: document.getElementById('brandLogoBtn'),
     logoutBtn: document.getElementById('logoutBtn'),
 
     // Filters
@@ -110,15 +111,23 @@ const elements = {
     recentConstituencies: document.getElementById('recentConstituencies'),
     recentTags: document.getElementById('recentTags'),
 
-    // Candidate Modal
-    addCandidateBtn: document.getElementById('addCandidateBtn'),
-    candidateModal: document.getElementById('candidateModal'),
-    modalTitle: document.getElementById('modalTitle'),
-    modalClose: document.getElementById('modalClose'),
-    modalCancel: document.getElementById('modalCancel'),
-    candidateForm: document.getElementById('candidateForm'),
+    // Unified Add Source Modal
+    addSourceBtn: document.getElementById('addSourceBtn'),
+    addSourceModal: document.getElementById('addSourceModal'),
+    addSourceModalClose: document.getElementById('addSourceModalClose'),
+    addSourceModalCancel: document.getElementById('addSourceModalCancel'),
+    addSourceSubmitBtn: document.getElementById('addSourceSubmitBtn'),
+    addSourceTypeContainer: document.getElementById('addSourceTypeContainer'),
+    addSourceCandidateSection: document.getElementById('addSourceCandidateSection'),
+    addSourceNewsSection: document.getElementById('addSourceNewsSection'),
+    addSourcePartySection: document.getElementById('addSourcePartySection'),
 
-    // Modal Form Fields
+    // Forms
+    candidateForm: document.getElementById('candidateForm'),
+    newsArticleForm: document.getElementById('newsArticleForm'),
+    partyPostForm: document.getElementById('partyPostForm'),
+
+    // Candidate Form Fields
     candidateId: document.getElementById('candidateId'),
     postId: document.getElementById('postId'),
     modalProvince: document.getElementById('modalProvince'),
@@ -136,6 +145,17 @@ const elements = {
     negativeRemarks: document.getElementById('negativeRemarks'),
     neutralRemarks: document.getElementById('neutralRemarks'),
     conclusion: document.getElementById('conclusion'),
+    newsSourceSelect: document.getElementById('newsSourceSelect'),
+    partySelect: document.getElementById('partySelect'),
+    newNewsSourceRow: document.getElementById('newNewsSourceRow'),
+    newNewsSourceName: document.getElementById('newNewsSourceName'),
+    newPartyRow: document.getElementById('newPartyRow'),
+    newPartyName: document.getElementById('newPartyName'),
+    newPartyAbbrev: document.getElementById('newPartyAbbrev'),
+    newsArticleUrl: document.getElementById('newsArticleUrl'),
+    newsArticleDate: document.getElementById('newsArticleDate'),
+    partyPostUrl: document.getElementById('partyPostUrl'),
+    partyPostDate: document.getElementById('partyPostDate'),
 
     // Comments Modal
     commentsModal: document.getElementById('commentsModal'),
@@ -180,6 +200,7 @@ const elements = {
     aiSubmitBtn: document.getElementById('aiSubmitBtn'),
     aiLoading: document.getElementById('aiLoading'),
     aiSourceUrl: document.getElementById('aiSourceUrl'),
+    aiSourceTypeContainer: document.getElementById('aiSourceTypeContainer'),
     aiSourceType: document.getElementById('aiSourceType'),
     aiCandidateSection: document.getElementById('aiCandidateSection'),
     aiNewsSection: document.getElementById('aiNewsSection'),
@@ -295,6 +316,19 @@ function checkUserRole() {
         // Hide Search Box completely
         const searchSection = document.querySelector('.filters__search');
         if (searchSection) searchSection.style.display = 'none';
+
+        // Hide "Add Source" Button in Header
+        const headerAddBtn = document.getElementById('addSourceBtn');
+        if (headerAddBtn) headerAddBtn.style.display = 'none';
+
+        // Hide Library Action Buttons
+        const libAddCandidate = document.getElementById('addCandidateLibraryBtn');
+        const libAddNews = document.getElementById('addNewsMediaBtn');
+        const libAddParty = document.getElementById('addPartyBtn');
+
+        if (libAddCandidate) libAddCandidate.style.display = 'none';
+        if (libAddNews) libAddNews.style.display = 'none';
+        if (libAddParty) libAddParty.style.display = 'none';
 
         // Add Viewer Badge
         const headerTitle = document.querySelector('.header__title');
@@ -425,17 +459,24 @@ async function loadConstituencies(districtId, constituencySelect) {
 }
 
 function populateSelect(select, items, labelKey) {
+    if (!select) return;
     const currentValue = select.value;
-    // Determine placeholder based on select ID, not labelKey
-    let placeholder = 'Item';
+    select.innerHTML = ''; // Clear all
+
+    // Determine placeholder based on select ID
+    let placeholderTxt = 'Item';
     if (select.id.toLowerCase().includes('province')) {
-        placeholder = 'Province';
+        placeholderTxt = 'Province';
     } else if (select.id.toLowerCase().includes('district')) {
-        placeholder = 'District';
+        placeholderTxt = 'District';
     } else if (select.id.toLowerCase().includes('constituency')) {
-        placeholder = 'Constituency';
+        placeholderTxt = 'Constituency';
     }
-    select.innerHTML = `< option value = "" > Select ${placeholder}</option > `;
+
+    const placeholderOpt = document.createElement('option');
+    placeholderOpt.value = "";
+    placeholderOpt.textContent = `Select ${placeholderTxt}`;
+    select.appendChild(placeholderOpt);
 
     // Sort items - use natural numeric sorting for constituencies
     const sortedItems = [...items].sort((a, b) => {
@@ -464,11 +505,17 @@ function populateSelect(select, items, labelKey) {
         select.value = currentValue;
     } else {
         select.value = ""; // Default to empty/placeholder
+        select.selectedIndex = 0; // Explicitly select the placeholder
     }
 }
 
 function resetSelect(select, placeholder) {
-    select.innerHTML = `< option value = "" > ${placeholder}</option > `;
+    if (!select) return;
+    select.innerHTML = '';
+    const opt = document.createElement('option');
+    opt.value = "";
+    opt.textContent = placeholder;
+    select.appendChild(opt);
     select.disabled = true;
 }
 
@@ -1358,7 +1405,7 @@ async function handleCandidateSubmit(e) {
         }
 
         // Close modal now that we have values
-        closeCandidateModal();
+        closeAddSourceModal();
 
         // Determine where to redirect
         // Logic: specific constituency from modal > current selected > fallback
@@ -1573,17 +1620,31 @@ let libraryData = [];
 let libraryNewsData = [];
 let libraryPartiesData = [];
 
-async function openLibrary() {
-    // Open Modal
-    elements.libraryModal.classList.add('active');
+async function showLibraryView() {
+    // Determine views
+    const dashboard = document.getElementById('dashboard-view');
+    const reports = document.getElementById('reports-view');
+    const library = document.getElementById('library-view');
 
-    // Load default tab (Candidates)
+    // Hide others, show library
+    if (dashboard) dashboard.style.display = 'none';
+    if (reports) reports.style.display = 'none';
+    if (library) library.style.display = 'block';
+
+    // Update nav active state (if library button exists in nav)
+    // Update nav active state (if library button exists in nav)
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    document.getElementById('libraryBtn')?.classList.add('active');
+
+    // Load default tab (Candidates) if it's the first time or every time?
+    // Original openLibrary called it every time.
     loadCandidatesLibrary();
     lucide.createIcons();
 }
 
 function closeLibrary() {
-    elements.libraryModal.classList.remove('active');
+    // Legacy support: go back to dashboard
+    showDashboardView();
 }
 
 function renderLibraryTable() {
@@ -2054,16 +2115,25 @@ function initEventListeners() {
         });
     }
 
-    // Add candidate button
-    elements.addCandidateBtn.addEventListener('click', () => openCandidateModal());
+    // Unified Add Source Modal Events
+    if (elements.addSourceBtn) {
+        elements.addSourceBtn.addEventListener('click', () => openAddSourceModal());
+    }
+    if (elements.addSourceModalClose) {
+        elements.addSourceModalClose.addEventListener('click', closeAddSourceModal);
+    }
+    if (elements.addSourceModalCancel) {
+        elements.addSourceModalCancel.addEventListener('click', closeAddSourceModal);
+    }
+    if (elements.addSourceModal) {
+        elements.addSourceModal.addEventListener('click', (e) => {
+            if (e.target === elements.addSourceModal) closeAddSourceModal();
+        });
+    }
 
-    // Candidate modal
-    elements.modalClose.addEventListener('click', closeCandidateModal);
-    elements.modalCancel.addEventListener('click', closeCandidateModal);
-    elements.candidateModal.addEventListener('click', (e) => {
-        if (e.target === elements.candidateModal) closeCandidateModal();
-    });
     elements.candidateForm.addEventListener('submit', handleCandidateSubmit);
+    elements.newsArticleForm.addEventListener('submit', handleNewsArticleSubmit);
+    elements.partyPostForm.addEventListener('submit', handlePartyPostSubmit);
 
     // Comments modal
     elements.commentsModalClose.addEventListener('click', closeCommentsModal);
@@ -2081,12 +2151,12 @@ function initEventListeners() {
         if (e.target === elements.remarksModal) closeRemarksModal();
     });
 
-    // Library modal
-    elements.libraryBtn.addEventListener('click', openLibrary);
-    elements.libraryModalClose.addEventListener('click', closeLibrary);
-    elements.libraryModal.addEventListener('click', (e) => {
-        if (e.target === elements.libraryModal) closeLibrary();
-    });
+    // Library View
+    elements.libraryBtn.addEventListener('click', showLibraryView);
+    // elements.libraryModalClose.addEventListener('click', closeLibrary); // Removed
+    // elements.libraryModal.addEventListener('click', (e) => { // Removed
+    //     if (e.target === elements.libraryModal) closeLibrary();
+    // });
     elements.exportAllExcel.addEventListener('click', () => exportToExcel());
     elements.exportAllPdf.addEventListener('click', () => exportToPDF());
 
@@ -2098,195 +2168,287 @@ function initEventListeners() {
         if (e.target === elements.aiModal) closeAIModal();
     });
 
-    // AI Source Type Toggle
-    // Segmented Control Logic for AI Source Type
-    const segmentButtons = document.querySelectorAll('.segment-btn');
-    segmentButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
-            // 1. Visual Update
-            segmentButtons.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-
-            // 2. Data Update
-            const type = btn.dataset.value;
-            if (elements.aiSourceType) elements.aiSourceType.value = type;
-
-            // 3. Trigger Logic
-            handleAnalysisTypeChange(type);
+    // Segmented Control Logic for Add Source Modal
+    console.log('Initializing Add Source Modal Segmented Control...');
+    if (elements.addSourceTypeContainer) {
+        console.log('addSourceTypeContainer found!');
+        const addSourceSegmentBtns = elements.addSourceTypeContainer.querySelectorAll('.segment-btn');
+        console.log(`Found ${addSourceSegmentBtns.length} segment buttons inside addSourceTypeContainer`);
+        addSourceSegmentBtns.forEach((btn, index) => {
+            console.log(`Attaching listener to button ${index}: ${btn.dataset.value}`);
+            btn.addEventListener('click', () => {
+                console.log(`Button clicked: ${btn.dataset.value}`);
+                addSourceSegmentBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                handleSourceTypeChange(btn.dataset.value);
+            });
         });
-    });
-
-    function handleAnalysisTypeChange(type) {
-        const candidateSec = elements.aiCandidateSection;
-        const newsSec = elements.aiNewsSection;
-        const partySec = elements.aiPartySection;
-
-        candidateSec.style.display = 'none';
-        newsSec.style.display = 'none';
-        partySec.style.display = 'none';
-
-        if (type === 'candidate') {
-            candidateSec.style.display = 'block';
-            // Required attributes validation fix
-            if (elements.aiProvince) elements.aiProvince.setAttribute('required', '');
-            if (elements.aiNewsSelect) elements.aiNewsSelect.removeAttribute('required');
-            if (elements.aiPartySelect) elements.aiPartySelect.removeAttribute('required');
-        } else if (type === 'news') {
-            newsSec.style.display = 'block';
-            populateNewsSelectorInAI();
-            if (elements.aiProvince) elements.aiProvince.removeAttribute('required');
-            if (elements.aiNewsSelect) elements.aiNewsSelect.setAttribute('required', '');
-            if (elements.aiPartySelect) elements.aiPartySelect.removeAttribute('required');
-        } else if (type === 'party') {
-            partySec.style.display = 'block';
-            populatePartySelectorInAI();
-            if (elements.aiProvince) elements.aiProvince.removeAttribute('required');
-            if (elements.aiNewsSelect) elements.aiNewsSelect.removeAttribute('required');
-            if (elements.aiPartySelect) elements.aiPartySelect.setAttribute('required', '');
-        }
+    } else {
+        console.error('CRITICAL: addSourceTypeContainer NOT found in elements!');
     }
 
-    // Initial State Check
-    // if (elements.aiSourceType) handleAnalysisTypeChange(elements.aiSourceType.value);
+    if (elements.addSourceSubmitBtn) {
+        elements.addSourceSubmitBtn.addEventListener('click', async (e) => {
+            // Find which form is active and submit it
+            if (elements.addSourceCandidateSection.style.display !== 'none') {
+                elements.candidateForm.requestSubmit();
+            } else if (elements.addSourceNewsSection.style.display !== 'none') {
+                elements.newsArticleForm.requestSubmit();
+            } else if (elements.addSourcePartySection.style.display !== 'none') {
+                elements.partyPostForm.requestSubmit();
+            }
+        });
+    }
 
-    // AI Form Location Selectors
-    elements.aiProvince.addEventListener('change', (e) => {
-        loadDistricts(e.target.value, null, elements.aiDistrict, elements.aiConstituency);
-        resetCandidateSelectorInAI();
-    });
+    // Segmented Control Logic for AI Source Type
+    if (elements.aiSourceTypeContainer) {
+        const aiSegmentButtons = elements.aiSourceTypeContainer.querySelectorAll('.segment-btn');
+        aiSegmentButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                // 1. Visual Update
+                aiSegmentButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
 
-    elements.aiDistrict.addEventListener('change', (e) => {
-        loadConstituencies(e.target.value, elements.aiConstituency);
-        resetCandidateSelectorInAI();
-    });
+                // 2. Data Update
+                const type = btn.dataset.value;
+                if (elements.aiSourceType) elements.aiSourceType.value = type;
 
-    elements.aiConstituency.addEventListener('change', async (e) => {
-        const constituencyId = e.target.value;
-        if (!constituencyId) {
-            resetCandidateSelectorInAI();
-            return;
-        }
-        try {
-            const candidates = await API.get(`/candidates?constituency_id=${constituencyId}`);
-            populateCandidateSelectorInAI(candidates);
-        } catch (error) {
-            console.error(error);
-        }
-    });
+                // 3. Trigger Logic
+                handleAnalysisTypeChange(type);
+            });
+        });
+    }
 
-    // File Upload Zone
-    elements.fileUploadZone.addEventListener('click', () => elements.aiFile.click());
-    elements.aiFile.addEventListener('change', (e) => {
-        if (e.target.files.length > 0) {
-            const count = e.target.files.length;
-            elements.fileName.textContent = count === 1 ? e.target.files[0].name : `${count} files selected`;
-            elements.fileUploadZone.style.borderColor = '#10b981';
-            elements.fileUploadZone.style.background = 'rgba(16, 185, 129, 0.1)';
-        }
-    });
 
-    // Drag & Drop
-    elements.fileUploadZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        elements.fileUploadZone.style.borderColor = '#8b5cf6';
-        elements.fileUploadZone.style.background = 'rgba(139, 92, 246, 0.1)';
-    });
 
-    elements.fileUploadZone.addEventListener('dragleave', (e) => {
-        e.preventDefault();
-        elements.fileUploadZone.style.borderColor = 'rgba(255,255,255,0.2)';
-        elements.fileUploadZone.style.background = 'transparent';
-    });
+    if (elements.aiForm) {
+        elements.aiForm.addEventListener('submit', handleAISubmit);
+    }
 
-    elements.fileUploadZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        elements.fileUploadZone.style.borderColor = '#10b981';
-        elements.fileUploadZone.style.background = 'rgba(16, 185, 129, 0.1)';
-
-        if (e.dataTransfer.files.length > 0) {
-            elements.aiFile.files = e.dataTransfer.files;
-            const count = e.dataTransfer.files.length;
-            elements.fileName.textContent = count === 1 ? e.dataTransfer.files[0].name : `${count} files selected`;
-        }
-    });
-
-    elements.aiForm.addEventListener('submit', handleAISubmit);
-
-    // Post Preview modal
-    elements.postPreviewModalClose.addEventListener('click', closePostPreview);
-    elements.postPreviewModal.addEventListener('click', (e) => {
-        if (e.target === elements.postPreviewModal) closePostPreview();
-    });
-
-    // Library Filter
-    elements.libraryDateFilter.addEventListener('change', (e) => {
-        if (e.target.value) {
-            elements.clearLibraryFilter.style.display = 'flex';
-        } else {
-            elements.clearLibraryFilter.style.display = 'none';
-        }
-
-        // Reload current active tab
-        const activeTab = document.querySelector('.library-tab.active')?.dataset.tab || 'candidates';
-        if (activeTab === 'candidates') {
-            loadCandidatesLibrary();
-        } else if (activeTab === 'news') {
-            loadNewsMediaLibrary();
-        } else if (activeTab === 'parties') {
-            loadPartiesLibrary();
-        }
-    });
-
-    elements.clearLibraryFilter.addEventListener('click', () => {
-        elements.libraryDateFilter.value = '';
-        elements.clearLibraryFilter.style.display = 'none';
-
-        // Reload current active tab to fetch all data
-        const activeTab = document.querySelector('.library-tab.active')?.dataset.tab || 'candidates';
-        if (activeTab === 'candidates') {
-            loadCandidatesLibrary();
-        } else if (activeTab === 'news') {
-            loadNewsMediaLibrary();
-        } else if (activeTab === 'parties') {
-            loadPartiesLibrary();
-        }
-    });
-
-    // Home button (header brand)
-    elements.homeBtn.addEventListener('click', goHome);
+    // Dashboard Buttons
+    if (elements.brandLogoBtn) {
+        elements.brandLogoBtn.addEventListener('click', goHome);
+    }
+    if (elements.homeBtn) {
+        elements.homeBtn.addEventListener('click', goHome);
+    }
 
     // Timeline Buttons
-    elements.prevDateBtn.addEventListener('click', () => changeDate(1)); // Older (index + 1)
-    elements.nextDateBtn.addEventListener('click', () => changeDate(-1)); // Newer (index - 1)
+    if (elements.prevDateBtn) {
+        elements.prevDateBtn.addEventListener('click', () => changeDate(1)); // Older (index + 1)
+    }
+    if (elements.nextDateBtn) {
+        elements.nextDateBtn.addEventListener('click', () => changeDate(-1)); // Newer (index - 1)
+    }
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-            closeCandidateModal();
+            closeAddSourceModal();
             closeCommentsModal();
             closeRemarksModal();
-            closeLibrary();
-            closePostPreview();
+            if (typeof closeLibrary === 'function') closeLibrary();
+            if (typeof closePostPreview === 'function') closePostPreview();
         }
     });
 
     // Clear zero on focus for numeric inputs
-    [elements.positivePercent, elements.negativePercent, elements.neutralPercent].forEach(input => {
-        if (!input) return;
+    if (elements.positivePercent) {
+        [elements.positivePercent, elements.negativePercent, elements.neutralPercent].forEach(input => {
+            if (!input) return;
 
-        input.addEventListener('focus', (e) => {
-            if (e.target.value === '0') {
-                e.target.value = '';
-            }
-        });
+            input.addEventListener('focus', (e) => {
+                if (e.target.value === '0') {
+                    e.target.value = '';
+                }
+            });
 
-        input.addEventListener('blur', (e) => {
-            if (e.target.value === '') {
-                e.target.value = '0';
-            }
+            input.addEventListener('blur', (e) => {
+                if (e.target.value === '') {
+                    e.target.value = '0';
+                }
+            });
         });
-    });
+    }
 }
+
+
+
+function handleAnalysisTypeChange(type) {
+    console.log('Changing AI Analysis type to:', type);
+    const candidateSec = elements.aiCandidateSection;
+    const newsSec = elements.aiNewsSection;
+    const partySec = elements.aiPartySection;
+
+    if (!candidateSec || !newsSec || !partySec) {
+        console.error('AI Source sections not found!');
+        return;
+    }
+
+    candidateSec.style.display = 'none';
+    newsSec.style.display = 'none';
+    partySec.style.display = 'none';
+
+    if (type === 'candidate') {
+        candidateSec.style.display = 'block';
+        if (elements.aiProvince) elements.aiProvince.setAttribute('required', '');
+        if (elements.aiNewsSelect) elements.aiNewsSelect.removeAttribute('required');
+        if (elements.aiPartySelect) elements.aiPartySelect.removeAttribute('required');
+    } else if (type === 'news') {
+        newsSec.style.display = 'block';
+        populateNewsSelectorInAI();
+        if (elements.aiProvince) elements.aiProvince.removeAttribute('required');
+        if (elements.aiNewsSelect) elements.aiNewsSelect.setAttribute('required', '');
+        if (elements.aiPartySelect) elements.aiPartySelect.removeAttribute('required');
+    } else if (type === 'party') {
+        partySec.style.display = 'block';
+        populatePartySelectorInAI();
+        if (elements.aiProvince) elements.aiProvince.removeAttribute('required');
+        if (elements.aiNewsSelect) elements.aiNewsSelect.removeAttribute('required');
+        if (elements.aiPartySelect) elements.aiPartySelect.setAttribute('required', '');
+    }
+}
+
+// Initial State Check
+// if (elements.aiSourceType) handleAnalysisTypeChange(elements.aiSourceType.value);
+
+// AI Form Location Selectors
+elements.aiProvince.addEventListener('change', (e) => {
+    loadDistricts(e.target.value, null, elements.aiDistrict, elements.aiConstituency);
+    resetCandidateSelectorInAI();
+});
+
+elements.aiDistrict.addEventListener('change', (e) => {
+    loadConstituencies(e.target.value, elements.aiConstituency);
+    resetCandidateSelectorInAI();
+});
+
+elements.aiConstituency.addEventListener('change', async (e) => {
+    const constituencyId = e.target.value;
+    if (!constituencyId) {
+        resetCandidateSelectorInAI();
+        return;
+    }
+    try {
+        const candidates = await API.get(`/candidates?constituency_id=${constituencyId}`);
+        populateCandidateSelectorInAI(candidates);
+    } catch (error) {
+        console.error(error);
+    }
+});
+
+// File Upload Zone
+elements.fileUploadZone.addEventListener('click', () => elements.aiFile.click());
+elements.aiFile.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+        const count = e.target.files.length;
+        elements.fileName.textContent = count === 1 ? e.target.files[0].name : `${count} files selected`;
+        elements.fileUploadZone.style.borderColor = '#10b981';
+        elements.fileUploadZone.style.background = 'rgba(16, 185, 129, 0.1)';
+    }
+});
+
+// Drag & Drop
+elements.fileUploadZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    elements.fileUploadZone.style.borderColor = '#8b5cf6';
+    elements.fileUploadZone.style.background = 'rgba(139, 92, 246, 0.1)';
+});
+
+elements.fileUploadZone.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    elements.fileUploadZone.style.borderColor = 'rgba(255,255,255,0.2)';
+    elements.fileUploadZone.style.background = 'transparent';
+});
+
+elements.fileUploadZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    elements.fileUploadZone.style.borderColor = '#10b981';
+    elements.fileUploadZone.style.background = 'rgba(16, 185, 129, 0.1)';
+
+    if (e.dataTransfer.files.length > 0) {
+        elements.aiFile.files = e.dataTransfer.files;
+        const count = e.dataTransfer.files.length;
+        elements.fileName.textContent = count === 1 ? e.dataTransfer.files[0].name : `${count} files selected`;
+    }
+});
+
+elements.aiForm.addEventListener('submit', handleAISubmit);
+
+// Post Preview modal
+elements.postPreviewModalClose.addEventListener('click', closePostPreview);
+elements.postPreviewModal.addEventListener('click', (e) => {
+    if (e.target === elements.postPreviewModal) closePostPreview();
+});
+
+// Library Filter
+elements.libraryDateFilter.addEventListener('change', (e) => {
+    if (e.target.value) {
+        elements.clearLibraryFilter.style.display = 'flex';
+    } else {
+        elements.clearLibraryFilter.style.display = 'none';
+    }
+
+    // Reload current active tab
+    const activeTab = document.querySelector('.library-tab.active')?.dataset.tab || 'candidates';
+    if (activeTab === 'candidates') {
+        loadCandidatesLibrary();
+    } else if (activeTab === 'news') {
+        loadNewsMediaLibrary();
+    } else if (activeTab === 'parties') {
+        loadPartiesLibrary();
+    }
+});
+
+elements.clearLibraryFilter.addEventListener('click', () => {
+    elements.libraryDateFilter.value = '';
+    elements.clearLibraryFilter.style.display = 'none';
+
+    // Reload current active tab to fetch all data
+    const activeTab = document.querySelector('.library-tab.active')?.dataset.tab || 'candidates';
+    if (activeTab === 'candidates') {
+        loadCandidatesLibrary();
+    } else if (activeTab === 'news') {
+        loadNewsMediaLibrary();
+    } else if (activeTab === 'parties') {
+        loadPartiesLibrary();
+    }
+});
+
+// Home button (header brand)
+elements.homeBtn.addEventListener('click', goHome);
+
+// Timeline Buttons
+elements.prevDateBtn.addEventListener('click', () => changeDate(1)); // Older (index + 1)
+elements.nextDateBtn.addEventListener('click', () => changeDate(-1)); // Newer (index - 1)
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeAddSourceModal();
+        closeCommentsModal();
+        closeRemarksModal();
+        closeLibrary();
+        closePostPreview();
+    }
+});
+
+// Clear zero on focus for numeric inputs
+[elements.positivePercent, elements.negativePercent, elements.neutralPercent].forEach(input => {
+    if (!input) return;
+
+    input.addEventListener('focus', (e) => {
+        if (e.target.value === '0') {
+            e.target.value = '';
+        }
+    });
+
+    input.addEventListener('blur', (e) => {
+        if (e.target.value === '') {
+            e.target.value = '0';
+        }
+    });
+});
 
 // ============================================
 // Recent Constituencies
@@ -2400,6 +2562,95 @@ function populateCandidateSelectorInAI(candidates) {
     });
 
     elements.aiCandidateSelect.disabled = false;
+}
+
+async function openAddSourceModal(type = 'candidate') {
+    elements.candidateForm.reset();
+    elements.newsArticleForm.reset();
+    elements.partyPostForm.reset();
+
+    // Reset segmented control
+    const candidateBtn = elements.addSourceTypeContainer.querySelector('.segment-btn[data-value="candidate"]');
+    if (candidateBtn) candidateBtn.click();
+
+    // Common reset for candidate form
+    elements.modalProvince.value = '';
+    resetSelect(elements.modalDistrict, 'Select District');
+    resetSelect(elements.modalConstituency, 'Select Constituency');
+    elements.candidateSelect.innerHTML = '<option value="">-- Select a Candidate --</option>';
+    elements.candidateSelect.disabled = true;
+
+    // Load provinces for candidate form
+    await populateSelect(elements.modalProvince, state.provinces, 'name_en');
+
+    elements.addSourceModal.classList.add('active');
+}
+
+function closeAddSourceModal() {
+    elements.addSourceModal.classList.remove('active');
+}
+
+function handleSourceTypeChange(type) {
+    console.log('--- handleSourceTypeChange triggered ---');
+    console.log('Type:', type);
+
+    if (!elements.addSourceCandidateSection || !elements.addSourceNewsSection || !elements.addSourcePartySection) {
+        console.error('CRITICAL: Add Source sections not found in elements object!');
+        console.log('Sections state:', {
+            candidate: !!elements.addSourceCandidateSection,
+            news: !!elements.addSourceNewsSection,
+            party: !!elements.addSourcePartySection
+        });
+        return;
+    }
+
+    // Hide all
+    elements.addSourceCandidateSection.style.display = 'none';
+    elements.addSourceNewsSection.style.display = 'none';
+    elements.addSourcePartySection.style.display = 'none';
+
+    // Show selected
+    if (type === 'candidate') {
+        console.log('Showing Candidate Section');
+        elements.addSourceCandidateSection.style.display = 'block';
+        if (elements.addSourceSubmitBtn) elements.addSourceSubmitBtn.style.background = 'var(--accent-primary)';
+    } else if (type === 'news') {
+        console.log('Showing News Section');
+        elements.addSourceNewsSection.style.display = 'block';
+        if (elements.addSourceSubmitBtn) elements.addSourceSubmitBtn.style.background = 'linear-gradient(135deg, #F59E0B, #D97706)';
+        populateNewsSourceSelect();
+    } else if (type === 'party') {
+        console.log('Showing Party Section');
+        elements.addSourcePartySection.style.display = 'block';
+        if (elements.addSourceSubmitBtn) elements.addSourceSubmitBtn.style.background = 'linear-gradient(135deg, #8B5CF6, #7C3AED)';
+        populatePartySelect();
+    }
+}
+
+async function populateNewsSourceSelect() {
+    try {
+        const sources = await API.get('/news-media');
+        elements.newsSourceSelect.innerHTML = '<option value="">-- Select or Add New --</option><option value="new">+ Add New News Source</option>';
+        sources.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = s.name_en || s.name_np || s.name;
+            elements.newsSourceSelect.appendChild(opt);
+        });
+    } catch (e) { console.error('Failed to load news sources', e); }
+}
+
+async function populatePartySelect() {
+    try {
+        const parties = await API.get('/parties');
+        elements.partySelect.innerHTML = '<option value="">-- Select or Add New --</option><option value="new">+ Add New Party</option>';
+        parties.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = p.name_en || p.name_np || p.name || p.abbreviation;
+            elements.partySelect.appendChild(opt);
+        });
+    } catch (e) { console.error('Failed to load parties', e); }
 }
 
 async function openAIModal() {
@@ -2616,9 +2867,7 @@ async function init() {
     initEventListeners();
     await loadProvinces();
     await loadRecentConstituencies();
-    initAddSourceDropdown();
     initLibraryTabs();
-    initNewModals();
     initDailyReports();
     console.log('✅ App ready!');
 }
@@ -2697,18 +2946,15 @@ function initLibraryTabs() {
 
     // Add News Source / Party buttons in library
     document.getElementById('addNewsMediaBtn')?.addEventListener('click', () => {
-        closeLibrary();
         openNewsArticleModal();
     });
 
     document.getElementById('addPartyBtn')?.addEventListener('click', () => {
-        closeLibrary();
         openPartyPostModal();
     });
 
     document.getElementById('addCandidateLibraryBtn')?.addEventListener('click', () => {
-        closeLibrary();
-        openCandidateModal();
+        openAddSourceModal('candidate');
     });
 }
 
@@ -2872,95 +3118,8 @@ async function loadPartiesLibrary() {
     }
 }
 
-// ============================================
-// News Article Modal
-// ============================================
-function initNewModals() {
-    // News Article Modal
-    const newsModal = document.getElementById('newsArticleModal');
-    const newsForm = document.getElementById('newsArticleForm');
-    const newsSourceSelect = document.getElementById('newsSourceSelect');
-    const newsCloseBtn = document.getElementById('newsArticleModalClose');
-    const newsCancelBtn = document.getElementById('newsArticleModalCancel');
-
-    newsCloseBtn?.addEventListener('click', () => closeNewsArticleModal());
-    newsCancelBtn?.addEventListener('click', () => closeNewsArticleModal());
-    newsModal?.addEventListener('click', (e) => {
-        if (e.target === newsModal) closeNewsArticleModal();
-    });
-
-    newsSourceSelect?.addEventListener('change', (e) => {
-        const newRow = document.getElementById('newNewsSourceRow');
-        if (e.target.value === 'new') {
-            newRow.style.display = 'block';
-        } else {
-            newRow.style.display = 'none';
-        }
-    });
-
-    newsForm?.addEventListener('submit', handleNewsArticleSubmit);
-
-    // Party Post Modal
-    const partyModal = document.getElementById('partyPostModal');
-    const partyForm = document.getElementById('partyPostForm');
-    const partySelect = document.getElementById('partySelect');
-    const partyCloseBtn = document.getElementById('partyPostModalClose');
-    const partyCancelBtn = document.getElementById('partyPostModalCancel');
-
-    partyCloseBtn?.addEventListener('click', () => closePartyPostModal());
-    partyCancelBtn?.addEventListener('click', () => closePartyPostModal());
-    partyModal?.addEventListener('click', (e) => {
-        if (e.target === partyModal) closePartyPostModal();
-    });
-
-    partySelect?.addEventListener('change', (e) => {
-        const newPartyRow = document.getElementById('newPartyRow');
-        const abbrevRow = document.getElementById('partyAbbrevRow');
-        if (e.target.value === 'new') {
-            newPartyRow.style.display = 'block';
-            abbrevRow.style.display = 'block';
-        } else {
-            newPartyRow.style.display = 'none';
-            abbrevRow.style.display = 'none';
-        }
-    });
-
-    partyForm?.addEventListener('submit', handlePartyPostSubmit);
-}
-
-async function openNewsArticleModal() {
-    const modal = document.getElementById('newsArticleModal');
-    const select = document.getElementById('newsSourceSelect');
-
-    // Reset form
-    document.getElementById('newsArticleForm')?.reset();
-    document.getElementById('newNewsSourceRow').style.display = 'none';
-
-    // Load existing news sources
-    try {
-        const response = await fetch('/api/news-media', {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
-        });
-        if (response.ok) {
-            const sources = await response.json();
-            select.innerHTML = '<option value="">-- Select or Add New --</option><option value="new">+ Add New News Source</option>';
-            sources.forEach(s => {
-                const opt = document.createElement('option');
-                opt.value = s.id;
-                opt.textContent = s.name_en || s.name_np;
-                select.appendChild(opt);
-            });
-        }
-    } catch (e) {
-        console.error('Error loading news sources:', e);
-    }
-
-    modal?.classList.add('active');
-    lucide?.createIcons();
-}
-
-function closeNewsArticleModal() {
-    document.getElementById('newsArticleModal')?.classList.remove('active');
+function closeAddSourceModal() {
+    elements.addSourceModal.classList.remove('active');
 }
 
 async function handleNewsArticleSubmit(e) {
@@ -3020,47 +3179,13 @@ async function handleNewsArticleSubmit(e) {
 
         if (!res.ok) throw new Error('Failed to save article');
         showToast('News article saved successfully!', 'success');
-        closeNewsArticleModal();
+        closeAddSourceModal();
     } catch (err) {
         showToast('Failed to save article: ' + err.message, 'error');
     }
 }
 
-async function openPartyPostModal() {
-    const modal = document.getElementById('partyPostModal');
-    const select = document.getElementById('partySelect');
 
-    // Reset form
-    document.getElementById('partyPostForm')?.reset();
-    document.getElementById('newPartyRow').style.display = 'none';
-    document.getElementById('partyAbbrevRow').style.display = 'none';
-
-    // Load existing parties
-    try {
-        const response = await fetch('/api/parties', {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
-        });
-        if (response.ok) {
-            const parties = await response.json();
-            select.innerHTML = '<option value="">-- Select or Add New --</option><option value="new">+ Add New Party</option>';
-            parties.forEach(p => {
-                const opt = document.createElement('option');
-                opt.value = p.id;
-                opt.textContent = p.name_en || p.name_np || p.abbreviation;
-                select.appendChild(opt);
-            });
-        }
-    } catch (e) {
-        console.error('Error loading parties:', e);
-    }
-
-    modal?.classList.add('active');
-    lucide?.createIcons();
-}
-
-function closePartyPostModal() {
-    document.getElementById('partyPostModal')?.classList.remove('active');
-}
 
 async function handlePartyPostSubmit(e) {
     e.preventDefault();
@@ -3123,7 +3248,7 @@ async function handlePartyPostSubmit(e) {
 
         if (!res.ok) throw new Error('Failed to save post');
         showToast('Party post saved successfully!', 'success');
-        closePartyPostModal();
+        closeAddSourceModal();
     } catch (err) {
         showToast('Failed to save post: ' + err.message, 'error');
     }
@@ -3132,336 +3257,59 @@ async function handlePartyPostSubmit(e) {
 // ============================================
 // Daily Reports Module
 // ============================================
-let rptPieChart = null;
-let rptBarChart = null;
+let dailyReportComponent = null;
 
 function initDailyReports() {
     const btn = document.getElementById('dailyReportsBtn');
-    const modal = document.getElementById('dailyReportsModal');
-    const closeBtn = document.getElementById('dailyReportsModalClose');
-    const generateBtn = document.getElementById('generateReportBtn');
-    const datePicker = document.getElementById('reportDatePicker');
 
-    if (!btn || !modal) return;
+    if (!btn) return;
 
-    const today = new Date().toISOString().split('T')[0];
-    if (datePicker) datePicker.value = today;
-
-    btn.addEventListener('click', () => openDailyReportsModal());
-    closeBtn?.addEventListener('click', () => closeDailyReportsModal());
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) closeDailyReportsModal();
+    btn.addEventListener('click', () => {
+        showReportsView();
     });
-
-    generateBtn?.addEventListener('click', () => generateDailyReport());
-    datePicker?.addEventListener('change', () => loadReportForDate(datePicker.value));
-
-    // Download Button
-    const downloadBtn = document.getElementById('downloadReportBtn');
-    downloadBtn?.addEventListener('click', downloadDailyReportPDF);
 }
 
-function updateDownloadButtonVisibility(hasData) {
-    const btn = document.getElementById('downloadReportBtn');
-    if (btn) btn.style.display = hasData ? 'flex' : 'none';
+function showReportsView() {
+    // Hide dashboard, show reports
+    const dashboard = document.getElementById('dashboard-view');
+    const reports = document.getElementById('reports-view');
+    const library = document.getElementById('library-view');
+
+    if (dashboard) dashboard.style.display = 'none';
+    if (reports) reports.style.display = 'block';
+    if (library) library.style.display = 'none';
+
+    // Update nav active state
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    document.getElementById('dailyReportsBtn')?.classList.add('active');
+
+    // Initialize component if first time
+    if (!dailyReportComponent) {
+        if (document.getElementById('daily-report-root')) {
+            console.log('Initializing DailyReportComponent...');
+            dailyReportComponent = new DailyReportComponent('daily-report-root');
+        } else {
+            console.error('Daily Report Root container not found!');
+        }
+    }
 }
 
-function openDailyReportsModal() {
-    const modal = document.getElementById('dailyReportsModal');
-    modal?.classList.add('active');
-    lucide?.createIcons();
+function showDashboardView() {
+    const dashboard = document.getElementById('dashboard-view');
+    const reports = document.getElementById('reports-view');
+    const library = document.getElementById('library-view');
 
-    const datePicker = document.getElementById('reportDatePicker');
-    const today = new Date().toISOString().split('T')[0];
-    if (datePicker) datePicker.value = today;
-    loadReportForDate(today);
+    if (dashboard) dashboard.style.display = 'block';
+    if (reports) reports.style.display = 'none';
+    if (library) library.style.display = 'none';
+
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    document.getElementById('homeBtn')?.classList.add('active');
 }
 
 function closeDailyReportsModal() {
-    document.getElementById('dailyReportsModal')?.classList.remove('active');
-}
-
-async function loadReportForDate(date) {
-    const loading = document.getElementById('reportLoading');
-    const noData = document.getElementById('reportNoData');
-    const content = document.getElementById('reportContent');
-    const status = document.getElementById('reportStatus');
-
-    if (!loading || !noData || !content) return;
-
-    loading.style.display = 'block';
-    noData.style.display = 'none';
-    content.style.display = 'none';
-
-    try {
-        const response = await fetch(`/api/reports/daily/${date}`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
-        });
-
-        if (!response.ok) {
-            loading.style.display = 'none';
-            noData.style.display = 'block';
-            if (status) status.textContent = 'No report found for this date';
-            updateDownloadButtonVisibility(false);
-            return;
-        }
-
-        const report = await response.json();
-        renderDailyReport(report);
-
-        loading.style.display = 'none';
-        content.style.display = 'block';
-        if (status) status.textContent = `Generated: ${new Date(report.generated_at || report.created_at).toLocaleString()}`;
-        updateDownloadButtonVisibility(true);
-
-    } catch (error) {
-        console.error('Error loading report:', error);
-        loading.style.display = 'none';
-        noData.style.display = 'block';
-        if (status) status.textContent = 'Failed to load report';
-    }
-}
-
-async function generateDailyReport() {
-    const loading = document.getElementById('reportLoading');
-    const noData = document.getElementById('reportNoData');
-    const content = document.getElementById('reportContent');
-    const status = document.getElementById('reportStatus');
-    const datePicker = document.getElementById('reportDatePicker');
-
-    if (!loading || !noData || !content) return;
-
-    loading.style.display = 'block';
-    noData.style.display = 'none';
-    content.style.display = 'none';
-    if (status) status.textContent = 'Generating report with AI analysis...';
-
-    try {
-        const response = await fetch('/api/reports/generate', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-            },
-            body: JSON.stringify({ date: datePicker?.value })
-        });
-
-        if (!response.ok) {
-            const err = await response.json();
-
-            // Handle missing table error specifically
-            if (err.error_code === 'MISSING_TABLE') {
-                const remarksModal = document.getElementById('remarksModal');
-                const remarksTitle = document.getElementById('remarksTitle');
-                const remarksContent = document.getElementById('remarksContent');
-
-                if (remarksModal && remarksTitle && remarksContent) {
-                    remarksTitle.textContent = '⚠️ Database Setup Required';
-                    remarksContent.innerHTML = `
-                        <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
-                            <p style="margin-top: 0; color: #fca5a5; font-weight: 500;">The 'daily_reports' table is missing from your database.</p>
-                            <p style="margin-bottom: 0; color: #cbd5e1; font-size: 0.9em;">Please run the following SQL script in your Supabase SQL Editor to fix this issue:</p>
-                        </div>
-                        <div style="position: relative;">
-                            <textarea readonly style="width: 100%; height: 300px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 12px; color: #a5f3fc; font-family: monospace; font-size: 12px; resize: none;">${err.sql}</textarea>
-                            <button onclick="navigator.clipboard.writeText(this.previousElementSibling.value); this.textContent='Copied!'" style="position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,0.1); border: none; padding: 4px 8px; border-radius: 4px; color: white; cursor: pointer; font-size: 11px;">Copy SQL</button>
-                        </div>
-                    `;
-                    remarksModal.classList.add('active');
-                    loading.style.display = 'none';
-                    if (status) status.textContent = 'Setup required';
-                    return;
-                }
-            }
-
-            throw new Error(err.error || err.message || 'Failed to generate report');
-        }
-
-        const report = await response.json();
-        renderDailyReport(report);
-
-        loading.style.display = 'none';
-        content.style.display = 'block';
-        if (status) status.textContent = `Generated: ${new Date().toLocaleString()}`;
-        updateDownloadButtonVisibility(true);
-        showToast('Daily report generated successfully!', 'success');
-
-    } catch (error) {
-        console.error('Error generating report:', error);
-        loading.style.display = 'none';
-        noData.style.display = 'block';
-        if (status) status.textContent = 'Failed to generate report';
-        showToast(error.message, 'error');
-    }
-}
-
-async function downloadDailyReportPDF() {
-    const content = document.getElementById('reportContent');
-    const status = document.getElementById('reportStatus');
-    const datePicker = document.getElementById('reportDatePicker');
-
-    if (!content) return;
-
-    if (status) status.textContent = 'Generating PDF...';
-
-    try {
-        const date = datePicker?.value || new Date().toISOString().split('T')[0];
-
-        // Ensure Lucide icons are rendered before capture
-        lucide?.createIcons();
-
-        const canvas = await html2canvas(content, {
-            scale: 2, // Retain high quality
-            useCORS: true,
-            backgroundColor: '#0a0a0c', // Dark theme background
-            logging: false
-        });
-
-        const imgData = canvas.toDataURL('image/png');
-
-        // A4 size: 210 x 297 mm
-        const pdf = new jspdf.jsPDF('p', 'mm', 'a4');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
-
-        const imgWidth = pdfWidth - 20; // 10mm margin each side
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-        // Add Title
-        pdf.setTextColor(40, 40, 40);
-        pdf.setFontSize(18);
-        pdf.text(`Daily Political Sentiment Report - ${date}`, 10, 15);
-
-        // Add Image
-        let heightLeft = imgHeight;
-        let position = 25; // Start below title
-
-        pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
-        heightLeft -= (pdfHeight - position);
-
-        // Handle multi-page content if necessary (basic implementation)
-        while (heightLeft >= 0) {
-            position = heightLeft - imgHeight;
-            pdf.addPage();
-            pdf.addImage(imgData, 'PNG', 10, position - 25, imgWidth, imgHeight); // Adjust for margin
-            heightLeft -= pdfHeight;
-        }
-
-        pdf.save(`nepal-election-report-${date}.pdf`);
-
-        if (status) status.textContent = 'PDF Downloaded!';
-        showToast('Report downloaded successfully', 'success');
-
-    } catch (error) {
-        console.error('PDF Generation Error:', error);
-        if (status) status.textContent = 'Failed to generate PDF';
-        showToast('Failed to generate PDF', 'error');
-    }
-}
-
-function renderDailyReport(report) {
-    // Summary cards
-    const postsEl = document.getElementById('rptTotalPosts');
-    const commentsEl = document.getElementById('rptTotalComments');
-    const positiveEl = document.getElementById('rptPositive');
-    const negativeEl = document.getElementById('rptNegative');
-    const neutralEl = document.getElementById('rptNeutral');
-
-    if (postsEl) postsEl.textContent = report.total_posts_analyzed || 0;
-    if (commentsEl) commentsEl.textContent = (report.total_comments_analyzed || 0).toLocaleString();
-    if (positiveEl) positiveEl.textContent = `${(report.overall_positive || 0).toFixed(1)}%`;
-    if (negativeEl) negativeEl.textContent = `${(report.overall_negative || 0).toFixed(1)}%`;
-    if (neutralEl) neutralEl.textContent = `${(report.overall_neutral || 0).toFixed(1)}%`;
-
-    // AI Summary
-    const summaryEl = document.getElementById('rptAISummary');
-    if (summaryEl) {
-        summaryEl.innerHTML = report.summary_text
-            ? report.summary_text.replace(/\n/g, '<br>')
-            : '<em>No AI summary available for this report.</em>';
-    }
-
-    // Render charts
-    renderReportCharts(report);
-
-    // Render source table
-    renderSourceTable(report.summaries || []);
-
-    lucide?.createIcons();
-}
-
-function renderReportCharts(report) {
-    const pieCtx = document.getElementById('rptPieChart');
-    const barCtx = document.getElementById('rptBarChart');
-
-    if (!pieCtx) return;
-
-    // Destroy existing charts
-    if (rptPieChart) { rptPieChart.destroy(); rptPieChart = null; }
-    if (rptBarChart) { rptBarChart.destroy(); rptBarChart = null; }
-
-    // Pie Chart
-    rptPieChart = new Chart(pieCtx, {
-        type: 'doughnut',
-        data: {
-            labels: ['Positive', 'Negative', 'Neutral'],
-            datasets: [{
-                data: [report.overall_positive || 0, report.overall_negative || 0, report.overall_neutral || 0],
-                backgroundColor: ['#10B981', '#EF4444', '#6B7280'],
-                borderWidth: 0
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: { legend: { position: 'bottom', labels: { color: '#999', padding: 20 } } }
-        }
-    });
-
-    // Bar Chart from summaries
-    const summaries = report.summaries || [];
-    if (summaries.length > 0 && barCtx) {
-        rptBarChart = new Chart(barCtx, {
-            type: 'bar',
-            data: {
-                labels: summaries.map(s => s.source_name || s.source_type),
-                datasets: [
-                    { label: 'Positive', data: summaries.map(s => s.avg_positive || 0), backgroundColor: '#10B981' },
-                    { label: 'Negative', data: summaries.map(s => s.avg_negative || 0), backgroundColor: '#EF4444' },
-                    { label: 'Neutral', data: summaries.map(s => s.avg_neutral || 0), backgroundColor: '#6B7280' }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: { legend: { position: 'bottom', labels: { color: '#999' } } },
-                scales: {
-                    x: { ticks: { color: '#999' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-                    y: { ticks: { color: '#999' }, grid: { color: 'rgba(255,255,255,0.05)' }, max: 100 }
-                }
-            }
-        });
-    }
-}
-
-function renderSourceTable(summaries) {
-    const tbody = document.getElementById('rptSourceTable');
-    if (!tbody) return;
-
-    if (!summaries || summaries.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="padding: 20px; text-align: center; color: #666;">No source data available</td></tr>';
-        return;
-    }
-
-    tbody.innerHTML = summaries.map(s => `
-        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-            <td style="padding: 12px; color: #f0f0f0;">${s.source_name || s.source_type}</td>
-            <td style="padding: 12px; text-align: center; color: #999;">${s.posts_count || 0}</td>
-            <td style="padding: 12px; text-align: center; color: #10B981;">${(s.avg_positive || 0).toFixed(1)}%</td>
-            <td style="padding: 12px; text-align: center; color: #EF4444;">${(s.avg_negative || 0).toFixed(1)}%</td>
-            <td style="padding: 12px; text-align: center; color: #6B7280;">${(s.avg_neutral || 0).toFixed(1)}%</td>
-        </tr>
-    `).join('');
+    // Legacy function support if called from elsewhere, redirects to dashboard view
+    showDashboardView();
 }
 
 // Start the app
@@ -3594,7 +3442,41 @@ function exportPartiesToPDF() {
 }
 
 // Attach Event Listeners for Exports
+function initNavigation() {
+    const homeBtn = document.getElementById('homeBtn');
+    if (homeBtn) {
+        homeBtn.style.cursor = 'pointer';
+        homeBtn.addEventListener('click', () => {
+            showDashboardView();
+        });
+    }
+
+    const brandLogoBtn = document.getElementById('brandLogoBtn');
+    if (brandLogoBtn) {
+        brandLogoBtn.style.cursor = 'pointer';
+        brandLogoBtn.addEventListener('click', () => {
+            showDashboardView();
+        });
+    }
+
+    const libraryBtn = document.getElementById('libraryBtn');
+    if (libraryBtn) {
+        libraryBtn.addEventListener('click', () => {
+            showLibraryView();
+        });
+    }
+
+    const dailyReportsBtn = document.getElementById('dailyReportsBtn');
+    if (dailyReportsBtn) {
+        dailyReportsBtn.addEventListener('click', () => {
+            showReportsView();
+        });
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+    initNavigation();
+    // ... rest of init
     // News Exports
     document.getElementById('exportNewsExcel')?.addEventListener('click', exportNewsToExcel);
     document.getElementById('exportNewsPdf')?.addEventListener('click', exportNewsToPDF);
