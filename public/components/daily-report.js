@@ -417,12 +417,26 @@ class DailyReportComponent {
     formatSummary(text) {
         if (!text) return '<p>No summary available.</p>';
 
-        // Convert markdown-style formatting
-        return text
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        // Convert markdown-style bold
+        let formatted = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+        // Process each line
+        return formatted
             .split('\n')
             .filter(p => p.trim())
-            .map(p => `<p>${p}</p>`)
+            .map(p => {
+                const trimmed = p.trim();
+                // Numbered list items (1., 2., 3., 4.)
+                if (/^[1-4]\.\s/.test(trimmed)) {
+                    return `<h4 style="margin-top: 16px; margin-bottom: 8px; color: #10B981;">${trimmed}</h4>`;
+                }
+                // Bullet points
+                if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+                    return `<li style="margin-left: 20px; margin-bottom: 6px;">${trimmed.substring(2)}</li>`;
+                }
+                // Regular paragraph
+                return `<p style="margin-bottom: 10px; line-height: 1.6;">${trimmed}</p>`;
+            })
             .join('');
     }
 

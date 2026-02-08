@@ -274,7 +274,9 @@ async function generateSourceSummaries(mediaPosts, candidatePosts) {
             engagement_count: sentiment.total_engagement,
             avg_positive: sentiment.overall_positive,
             avg_negative: sentiment.overall_negative,
-            avg_neutral: sentiment.overall_neutral
+            avg_neutral: sentiment.overall_neutral,
+            positive_remarks: group.posts.map(p => p.positive_remarks).filter(Boolean).slice(0, 2).join(' | '),
+            negative_remarks: group.posts.map(p => p.negative_remarks).filter(Boolean).slice(0, 2).join(' | ')
         });
     }
 
@@ -323,24 +325,27 @@ async function generateSummary(reportData) {
             const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
             const prompt = `You are a strategic political analyst for Nepal.
-Analyze this daily social media sentiment data and provide a brief strategic briefing.
+Analyze this daily social media sentiment data and provide a detailed strategic briefing WITH SPECIFIC EXAMPLES.
 
 Data Summary:
 - Date: ${reportData.report_date}
 - Total Posts Analyzed: ${reportData.total_posts_analyzed}
 - Overall Sentiment: ${reportData.overall_positive.toFixed(1)}% Positive / ${reportData.overall_negative.toFixed(1)}% Negative / ${reportData.overall_neutral.toFixed(1)}% Neutral
 
-Top Sources:
-${reportData.source_summaries?.slice(0, 5).map(s =>
-                `- ${s.source_name}: ${s.post_count} posts (${s.avg_positive.toFixed(1)}% positive, ${s.avg_negative.toFixed(1)}% negative)`
+Top Sources with Sentiment Details:
+${reportData.source_summaries?.slice(0, 8).map(s =>
+                `- ${s.source_name}: ${s.post_count} posts (${s.avg_positive.toFixed(1)}% positive, ${s.avg_negative.toFixed(1)}% negative)
+      Positive Themes: ${s.positive_remarks || 'N/A'}
+      Negative Themes: ${s.negative_remarks || 'N/A'}`
             ).join('\n') || 'No source data available'}
 
-Provide:
-1. Key Takeaway (1-2 sentences)
-2. Notable Trends
-3. Recommended Actions (if any)
+Provide a detailed strategic briefing with these sections:
+1. **Executive Summary**: 2-3 sentences summarizing the overall state of public opinion today.
+2. **What People Praised**: List specific themes people were positive about, WITH example quotes or paraphrases from the data above.
+3. **What People Criticized**: List specific themes people were negative about, WITH example quotes or paraphrases from the data above.
+4. **Strategic Recommendation**: 1-2 actionable insights for decision makers.
 
-Keep it brief and actionable.`;
+Use **bold** for emphasis. Include specific examples in each section.`;
 
             const result = await model.generateContent(prompt);
             const response = await result.response;

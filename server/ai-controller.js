@@ -219,11 +219,17 @@ async function analyzeComments(req, res) {
                - How much "Love" (Support/Positive), "Hate" (Criticism/Negative), or "Neutral" sentiment is directed specifically at RSP?
                - If RSP is NOT mentioned, set RSP values to 0 or "Not mentioned".
             
-            3. **Remarks**:
-               - Summarize why people are Positive/Negative generally.
-               - **RSP Specific Remarks**: Specific reasons for love/hate towards RSP (e.g., "Praised for quick action", "Criticized for stunt").
+            3. **Detailed Remarks WITH EXAMPLES**:
+               - **positive_remarks**: Summarize why people are positive. MUST include 1-2 shortened example quotes from the comments showing praise. Format: "People are praising X because Y. Example: 'quote here'"
+               - **negative_remarks**: Summarize why people are negative. MUST include 1-2 shortened example quotes showing criticism. Format: "People are criticizing X because Y. Example: 'quote here'"
+               - **neutral_remarks**: Key factual or neutral discussions with 1 example.
+               - **rsp_remarks**: Specific reasons for love/hate towards RSP with examples.
 
-            4. **Comments Summary**: Write a brief paragraph (2-4 sentences) that summarizes the overall themes, topics, and public sentiment found in the comments. This should be a human-readable summary suitable for display in a report.
+            4. **comments_summary**: Write a detailed paragraph (4-6 sentences) structured as:
+               - Main theme or topic of discussion
+               - **What people liked**: specific praise with a short example quote
+               - **What people disliked**: specific criticism with a short example quote
+               - Overall conclusion
 
             Return ONLY raw JSON (no markdown formatting) with this exact structure:
             {
@@ -233,11 +239,11 @@ async function analyzeComments(req, res) {
                 "rsp_love_percentage": number,
                 "rsp_hate_percentage": number,
                 "rsp_neutral_percentage": number,
-                "positive_remarks": "general positive summary",
-                "negative_remarks": "general negative summary",
-                "neutral_remarks": "general neutral summary",
-                "rsp_remarks": "Specific summary of sentiment towards RSP",
-                "comments_summary": "A brief 2-4 sentence paragraph summarizing the key themes and overall sentiment from the analyzed comments.",
+                "positive_remarks": "detailed summary WITH example quotes",
+                "negative_remarks": "detailed summary WITH example quotes",
+                "neutral_remarks": "factual topics with example",
+                "rsp_remarks": "RSP-specific sentiment with examples",
+                "comments_summary": "Detailed 4-6 sentence paragraph with examples as specified above.",
                 "conclusion": "Final verification of public perception, highlighting RSP's standing."
             }
 
