@@ -2869,7 +2869,7 @@ async function handleAISubmit(e) {
     elements.aiSubmitBtn.disabled = true;
 
     const formData = new FormData();
-    const sourceType = elements.aiSourceType.value;
+    // sourceType is already defined at the top of the function
 
     // Add source identifier based on type
     if (sourceType === 'candidate') {
