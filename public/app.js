@@ -211,6 +211,7 @@ const elements = {
     timelineSection: document.getElementById('timelineSection'),
     prevDateBtn: document.getElementById('prevDateBtn'),
     nextDateBtn: document.getElementById('nextDateBtn'),
+    viewAllDatesBtn: document.getElementById('viewAllDatesBtn'),
     currentDateDisplay: document.getElementById('currentDateDisplay'),
     dateStatus: document.getElementById('dateStatus'),
 
@@ -586,21 +587,56 @@ async function loadCandidatesByConstituency(constituencyId, date = null, filterB
         state.filterByDate = true;
     }
 
-    // Only filter by date if user explicitly requested it
-    let dateToFetch = null;
-    if (state.filterByDate && state.availableDates.length > 0) {
-        dateToFetch = date || state.availableDates[state.currentDateIndex];
-    }
-
     try {
-        const query = dateToFetch
-            ? `/candidates?constituency_id=${constituencyId}&date=${dateToFetch}`
-            : `/candidates?constituency_id=${constituencyId}`;
+        // ALWAYS fetch ALL data first to generate the "All Time Summary"
+        // This is inefficient for huge datasets but necessary for the requested UI "Summary of all data ever posted"
+        // Optimization: In a real app, we might request summary stats separately from the daily posts.
+        // For now, we'll fetch all and filter client-side or stick to the current logic if "All Time" is just "All Available".
 
-        state.candidates = await API.get(query);
+        // Actually, let's keep it simple:
+        // 1. Fetch ALL candidates for the summary (no date filter)
+        const allCandidatesMap = await API.get(`/candidates?constituency_id=${constituencyId}`);
+
+        // Render Summary Chart using ALL data
+        renderSummaryChart(allCandidatesMap);
+
+        // 2. Determine what to show in the Grid (Timeline)
+        let dateToFetch = null;
+        if (state.filterByDate && state.availableDates.length > 0) {
+            dateToFetch = date || state.availableDates[state.currentDateIndex];
+        }
+
+        let candidatesForGrid = allCandidatesMap; // Default is all
+
+        // If specific date requested, filter
+        // Note: The API `/candidates?constituency_id=X&date=Y` does the filtering better than client side 
+        // if we want to reduce payload, but we just fetched all for summary. 
+        // Let's filter client-side to save a request since we have the data, 
+        // UNLESS the API returns different join structures.
+        // The API returns `posts` array. We can filter that array.
+
+        if (dateToFetch) {
+            // Clone to avoid modifying the summary source
+            candidatesForGrid = allCandidatesMap.map(c => ({
+                ...c,
+                posts: c.posts.filter(p => p.published_date === dateToFetch)
+            })).filter(c => c.posts.length > 0); // Only show candidates with posts on that date? Or show empty card?
+            // Usually show empty card if they exist but no posts, or hide them?
+            // "Recent data should be shown".
+        } else {
+            // "All Dates" behavior: Show everything, latest first.
+            // Ensure posts are sorted by date desc
+            candidatesForGrid = allCandidatesMap.map(c => ({
+                ...c,
+                posts: c.posts.sort((a, b) => new Date(b.published_date) - new Date(a.published_date))
+            }));
+        }
+
+        state.candidates = candidatesForGrid;
+
         renderCandidateCards();
-        renderSummaryChart();
         updateTimelineUI();
+        lucide.createIcons(); // Fix arrows
     } catch (error) {
         showToast('Failed to load candidates', 'error');
         console.error(error);
@@ -639,6 +675,9 @@ function updateTimelineUI() {
         elements.dateStatus.textContent = `${state.availableDates.length} date(s) available - Click arrows to filter`;
         elements.nextDateBtn.disabled = true;
         elements.prevDateBtn.disabled = false; // Allow going to specific dates
+
+        if (elements.viewAllDatesBtn) elements.viewAllDatesBtn.style.display = 'none';
+
     } else {
         const dateStr = state.availableDates[state.currentDateIndex];
         const dateObj = new Date(dateStr);
@@ -663,6 +702,8 @@ function updateTimelineUI() {
         } else {
             elements.prevDateBtn.disabled = false;
         }
+
+        if (elements.viewAllDatesBtn) elements.viewAllDatesBtn.style.display = 'block';
     }
 }
 
@@ -1095,13 +1136,19 @@ function createCandidateCard(candidate, index, isSearchResult) {
 // ============================================
 // Summary Chart
 // ============================================
-function renderSummaryChart() {
+// ============================================
+// Summary Chart
+// ============================================
+function renderSummaryChart(candidatesData) {
     if (state.charts.summary) {
         state.charts.summary.destroy();
     }
 
-    // Only include candidates with posts (same filter as cards)
-    const candidatesWithPosts = state.candidates.filter(c => c.posts && c.posts.length > 0 && c.posts[0].id);
+    // Use provided data (ALL TIME) or fallback to state
+    const dataSource = candidatesData || state.candidates;
+
+    // Only include candidates with posts
+    const candidatesWithPosts = dataSource.filter(c => c.posts && c.posts.length > 0);
 
     if (candidatesWithPosts.length === 0) {
         elements.summarySection.style.display = 'none';
@@ -1110,79 +1157,141 @@ function renderSummaryChart() {
     }
 
     elements.summarySection.style.display = 'block';
-    const categories = candidatesWithPosts.map(c => c.party_name);
-    // Use WEIGHTED AVERAGE for summary chart (instead of just first post)
-    const positiveData = candidatesWithPosts.map(c => calculateWeightedStats(c.posts || []).avgPositive);
-    const negativeData = candidatesWithPosts.map(c => calculateWeightedStats(c.posts || []).avgNegative);
-    const neutralData = candidatesWithPosts.map(c => calculateWeightedStats(c.posts || []).avgNeutral);
+
+    // --- POPULATE METRICS ---
+    let totalPosts = 0;
+    let totalComments = 0;
+
+    candidatesWithPosts.forEach(c => {
+        c.posts.forEach(p => {
+            totalPosts++;
+            totalComments += (p.comment_count || 0);
+        });
+    });
+
+    const summaryMetrics = document.getElementById('summaryMetrics');
+    if (summaryMetrics) {
+        summaryMetrics.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 12px; border-radius: 12px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="background: rgba(16, 185, 129, 0.2); padding: 6px; border-radius: 6px;">
+                        <i data-lucide="file-text" style="width: 16px; height: 16px; color: #10b981;"></i>
+                    </div>
+                    <span style="color: #ccc; font-size: 0.9rem;">Total Posts</span>
+                </div>
+                <span style="font-size: 1.1rem; font-weight: 600;">${totalPosts}</span>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 12px; border-radius: 12px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="background: rgba(245, 158, 11, 0.2); padding: 6px; border-radius: 6px;">
+                        <i data-lucide="message-circle" style="width: 16px; height: 16px; color: #f59e0b;"></i>
+                    </div>
+                    <span style="color: #ccc; font-size: 0.9rem;">Total Comments</span>
+                </div>
+                <span style="font-size: 1.1rem; font-weight: 600;">${totalComments.toLocaleString()}</span>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 12px; border-radius: 12px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="background: rgba(99, 102, 241, 0.2); padding: 6px; border-radius: 6px;">
+                        <i data-lucide="users" style="width: 16px; height: 16px; color: #6366f1;"></i>
+                    </div>
+                    <span style="color: #ccc; font-size: 0.9rem;">Active Candidates</span>
+                </div>
+                <span style="font-size: 1.1rem; font-weight: 600;">${candidatesWithPosts.length}</span>
+            </div>
+        `;
+        lucide.createIcons({ node: summaryMetrics });
+    }
+
+    // --- RENDER CHART ---
+    // We want to show the Overall Sentiment Split for the Constituency (Pie/Donut)
+    // NOT a bar chart of each candidate (user asked for Summary)
+
+    // Calculate aggregate weighted sentiment
+    let totalWeightedPositive = 0;
+    let totalWeightedNegative = 0;
+    let totalWeightedNeutral = 0;
+    let grandTotalComments = 0;
+
+    candidatesWithPosts.forEach(c => {
+        const stats = calculateWeightedStats(c.posts);
+        // Reverse calculations to get raw weighted sums
+        // avg = weightedSum / totalComments
+        // weightedSum = avg * totalComments
+        totalWeightedPositive += stats.avgPositive * stats.totalComments;
+        totalWeightedNegative += stats.avgNegative * stats.totalComments;
+        totalWeightedNeutral += stats.avgNeutral * stats.totalComments;
+        grandTotalComments += stats.totalComments;
+    });
+
+    let series = [0, 0, 0];
+    if (grandTotalComments > 0) {
+        series = [
+            (totalWeightedPositive / grandTotalComments),
+            (totalWeightedNegative / grandTotalComments),
+            (totalWeightedNeutral / grandTotalComments)
+        ];
+    } else {
+        // Fallback to simple average of averages if no comments
+        const count = candidatesWithPosts.length;
+        if (count > 0) {
+            const sumPos = candidatesWithPosts.reduce((s, c) => s + calculateWeightedStats(c.posts).avgPositive, 0);
+            const sumNeg = candidatesWithPosts.reduce((s, c) => s + calculateWeightedStats(c.posts).avgNegative, 0);
+            const sumNeu = candidatesWithPosts.reduce((s, c) => s + calculateWeightedStats(c.posts).avgNeutral, 0);
+            series = [sumPos / count, sumNeg / count, sumNeu / count];
+        }
+    }
 
     state.charts.summary = new ApexCharts(elements.summaryChart, {
         chart: {
-            type: 'bar',
-            height: 350,
+            type: 'donut',
+            height: 280,
             background: 'transparent',
-            toolbar: { show: false },
-            animations: {
-                enabled: true,
-                easing: 'easeinout',
-                speed: 800
-            }
+            fontFamily: 'Inter, sans-serif'
         },
-        series: [
-            { name: 'Positive', data: positiveData },
-            { name: 'Negative', data: negativeData },
-            { name: 'Neutral', data: neutralData }
-        ],
+        series: series,
+        labels: ['Positive', 'Negative', 'Neutral'],
         colors: ['#10b981', '#ef4444', '#6b7280'],
-        plotOptions: {
-            bar: {
-                horizontal: false,
-                columnWidth: '60%',
-                borderRadius: 6
-            }
+        legend: {
+            position: 'bottom',
+            labels: { colors: '#ffffff' }
         },
         dataLabels: {
-            enabled: false
-        },
-        stroke: {
-            show: true,
-            width: 2,
-            colors: ['transparent']
-        },
-        xaxis: {
-            categories: categories,
-            labels: { style: { colors: '#a0a0b0', fontSize: '12px' } },
-            axisBorder: { show: false },
-            axisTicks: { show: false }
-        },
-        yaxis: {
-            max: 100,
-            labels: {
-                style: { colors: '#a0a0b0' },
-                formatter: (val) => `${val}%`
+            enabled: true,
+            formatter: function (val) {
+                return val.toFixed(1) + "%";
             }
         },
-        legend: {
-            position: 'top',
-            labels: { colors: '#a0a0b0' }
+        plotOptions: {
+            pie: {
+                donut: {
+                    size: '65%',
+                    labels: {
+                        show: true,
+                        total: {
+                            show: true,
+                            label: 'Overall',
+                            color: '#ffffff',
+                            formatter: function (w) {
+                                return "Sentiment";
+                            }
+                        }
+                    }
+                }
+            }
         },
-        fill: {
-            opacity: 1
-        },
-        tooltip: {
-            theme: 'dark',
-            y: { formatter: (val) => `${val}%` }
-        },
-        grid: {
-            borderColor: 'rgba(255,255,255,0.05)',
-            strokeDashArray: 4
-        }
+        stroke: { show: false },
+        tooltip: { theme: 'dark' }
     });
 
     state.charts.summary.render();
-    elements.summarySection.style.display = 'block';
 
-    // Update winner section
+    // Update winner section (optional, keeping it based on filtered content or all time? 
+    // Usually Winner should match the grid below, so let's pass state.candidates if available, or just hide it)
+    // The previous code passed candidatesWithPosts which is ALL TIME. 
+    // Let's stick to ALL TIME for winner too as "Constituency Winner".
     updateWinnerSection(candidatesWithPosts);
 }
 
@@ -2239,6 +2348,12 @@ function initEventListeners() {
     if (elements.nextDateBtn) {
         elements.nextDateBtn.addEventListener('click', () => changeDate(-1)); // Newer (index - 1)
     }
+    if (elements.viewAllDatesBtn) {
+        elements.viewAllDatesBtn.addEventListener('click', () => {
+            state.filterByDate = false;
+            loadCandidatesByConstituency(state.selectedConstituencyId);
+        });
+    }
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
@@ -2694,6 +2809,13 @@ async function populateNewsSelectorInAI() {
             opt.textContent = s.name_en || s.name_np;
             elements.aiNewsSelect.appendChild(opt);
         });
+        // Add "Other" option
+        const otherOpt = document.createElement('option');
+        otherOpt.value = 'other';
+        otherOpt.textContent = 'Other (Add New)';
+        otherOpt.style.fontWeight = 'bold';
+        otherOpt.style.color = '#ffd700';
+        elements.aiNewsSelect.appendChild(otherOpt);
     } catch (e) { console.error('Failed to load news sources', e); }
 }
 
@@ -2755,7 +2877,43 @@ async function handleAISubmit(e) {
         formData.append('candidate_id', candidateId);
         formData.append('source_type', 'candidate');
     } else if (sourceType === 'news') {
-        const newsId = elements.aiNewsSelect.value;
+        let newsId = elements.aiNewsSelect.value;
+
+        // Handle "Other" news source creation
+        if (newsId === 'other') {
+            const newSourceName = document.getElementById('aiRecNewsSourceName')?.value?.trim();
+            if (!newSourceName) {
+                showToast('Please enter the new news media name', 'error');
+                elements.aiLoading.style.display = 'none';
+                elements.aiSubmitBtn.disabled = false;
+                return;
+            }
+
+            try {
+                // Create new source on the fly
+                const res = await fetch('/api/news-media', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                    },
+                    body: JSON.stringify({ name_en: newSourceName })
+                });
+
+                if (!res.ok) throw new Error('Failed to create new news source');
+                const newSource = await res.json();
+                newsId = newSource.id;
+
+                // Refresh list for next time (optional but good UI)
+                await populateNewsSelectorInAI();
+            } catch (err) {
+                showToast('Failed to create new news source: ' + err.message, 'error');
+                elements.aiLoading.style.display = 'none';
+                elements.aiSubmitBtn.disabled = false;
+                return;
+            }
+        }
+
         if (!newsId) { showToast('Please select a news source', 'error'); elements.aiLoading.style.display = 'none'; elements.aiSubmitBtn.disabled = false; return; }
         formData.append('news_media_id', newsId);
         formData.append('source_type', 'news_media');
@@ -3483,4 +3641,26 @@ document.addEventListener('DOMContentLoaded', () => {
     // Party Exports
     document.getElementById('exportPartiesExcel')?.addEventListener('click', exportPartiesToExcel);
     document.getElementById('exportPartiesPdf')?.addEventListener('click', exportPartiesToPDF);
+
+    // AI "Other" News Source Listener
+    const aiNewsSelect = document.getElementById('aiNewsSelect');
+    if (aiNewsSelect) {
+        aiNewsSelect.addEventListener('change', (e) => {
+            const container = document.getElementById('aiRecNewsSourceContainer');
+            if (container) {
+                container.style.display = e.target.value === 'other' ? 'block' : 'none';
+            }
+        });
+    }
+
+    // Manual "Add New" News Source Listener
+    const newsSourceSelect = document.getElementById('newsSourceSelect');
+    if (newsSourceSelect) {
+        newsSourceSelect.addEventListener('change', (e) => {
+            const newRow = document.getElementById('newNewsSourceRow');
+            if (newRow) {
+                newRow.style.display = e.target.value === 'new' ? 'flex' : 'none';
+            }
+        });
+    }
 });

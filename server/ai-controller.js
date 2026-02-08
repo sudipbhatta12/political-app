@@ -209,26 +209,39 @@ async function analyzeComments(req, res) {
         const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
         const prompt = `
-            You are a political analyst expert. Analyze the following list of public comments regarding a political entity (candidate, party, or news).
+            You are a political analyst expert specializing in Nepal's political landscape. Analyze the following list of public comments or article text regarding a news source or political entity.
             
-            Determine the overall sentiment distribution (Positive, Negative, Neutral) as percentages.
-            Summarize the key "Positive Remarks" (why people like them), "Negative Remarks" (why people dislike them), and "Neutral Remarks".
-            Provide a final "Conclusion" summarizing the public perception.
+            **CRITICAL GOAL**: You must specifically analyze the sentiment towards the **Rastriya Swatantra Party (RSP)** and its figures (e.g., Ravi Lamichhane) distinct from the general sentiment.
+
+            1. **General Sentiment**: Overall sentiment of the content (Positive/Negative/Neutral percentages).
+            
+            2. **RSP Specific Analysis**:
+               - How much "Love" (Support/Positive), "Hate" (Criticism/Negative), or "Neutral" sentiment is directed specifically at RSP?
+               - If RSP is NOT mentioned, set RSP values to 0 or "Not mentioned".
+            
+            3. **Remarks**:
+               - Summarize why people are Positive/Negative generally.
+               - **RSP Specific Remarks**: Specific reasons for love/hate towards RSP (e.g., "Praised for quick action", "Criticized for stunt").
 
             Return ONLY raw JSON (no markdown formatting) with this exact structure:
             {
                 "positive_percentage": number,
                 "negative_percentage": number,
                 "neutral_percentage": number,
-                "positive_remarks": "string summary",
-                "negative_remarks": "string summary",
-                "neutral_remarks": "string summary",
-                "conclusion": "string summary"
+                "rsp_love_percentage": number,
+                "rsp_hate_percentage": number,
+                "rsp_neutral_percentage": number,
+                "positive_remarks": "general positive summary",
+                "negative_remarks": "general negative summary",
+                "neutral_remarks": "general neutral summary",
+                "rsp_remarks": "Specific summary of sentiment towards RSP",
+                "conclusion": "Final verification of public perception, highlighting RSP's standing."
             }
 
-            Ensure percentages sum to exactly 100.
+            Ensure general percentages sum to exactly 100.
+            Ensure RSP percentages sum to exactly 100 (if relevant) or 0 (if not mentioned).
 
-            COMMENTS DATA:
+            COMMENTS/TEXT DATA:
             ${commentsText}
         `;
 

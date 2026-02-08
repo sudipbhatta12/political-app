@@ -940,6 +940,54 @@ app.get('/api/library/news-media', async (req, res) => {
     }
 });
 
+// Create news media
+app.post('/api/news-media', async (req, res) => {
+    try {
+        if (!req.body.name_en) {
+            return res.status(400).json({ error: 'Name is required' });
+        }
+        const id = await newsMediaLib.createNewsMedia(req.body);
+        res.json({ id, name_en: req.body.name_en });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Create news media post
+app.post('/api/news-media/:id/posts', async (req, res) => {
+    try {
+        const newsMediaId = parseInt(req.params.id);
+        const {
+            post_url, published_date,
+            positive_percentage, negative_percentage, neutral_percentage,
+            positive_remarks, negative_remarks, neutral_remarks, conclusion,
+            platform // Added platform support if backend supports it
+        } = req.body;
+
+        // Validate percentages
+        const total = (positive_percentage || 0) + (negative_percentage || 0) + (neutral_percentage || 0);
+        if (total > 0 && (total < 99 || total > 101)) {
+            return res.status(400).json({ error: 'Sentiment percentages should add up to 100%' });
+        }
+
+        const postId = await newsMediaLib.createNewsMediaPost(newsMediaId, {
+            post_url,
+            published_date,
+            positive_percentage: positive_percentage || 0,
+            negative_percentage: negative_percentage || 0,
+            neutral_percentage: neutral_percentage || 0,
+            content: positive_remarks || '', // Map positive_remarks to content as fallback
+            conclusion: conclusion || '',
+            platform: platform || 'web' // Default to web if not provided
+        });
+
+        res.status(201).json({ id: postId, message: 'News article analysis saved successfully' });
+    } catch (error) {
+        console.error('Error creating news media post:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Get parties library
 app.get('/api/library/parties', async (req, res) => {
     try {

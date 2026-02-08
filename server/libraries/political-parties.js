@@ -7,7 +7,7 @@ const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
 const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
 const supabase = createClient(supabaseUrl || 'https://placeholder.supabase.co', supabaseKey || 'placeholder-key');
 
 module.exports = {
@@ -122,7 +122,13 @@ module.exports = {
         const { data, error } = await supabase.from('media_posts').insert({
             source_type: 'political_party',
             source_id: partyId,
-            ...postData
+            post_url: postData.post_url,
+            published_date: postData.published_date,
+            positive_percentage: postData.positive_percentage,
+            negative_percentage: postData.negative_percentage,
+            neutral_percentage: postData.neutral_percentage,
+            neutral_percentage: postData.neutral_percentage,
+            content: postData.remarks || postData.content || ''
         }).select('id').single();
         if (error) throw new Error(error.message);
         return data.id;

@@ -112,10 +112,41 @@
                 </div>
             </section>
 
+            <!-- All Time Summary Section -->
+            <section class="summary-section" id="summarySection" style="display: none; margin-bottom: 24px;">
+                <div class="summary-card"
+                    style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 16px; padding: 24px;">
+                    <h2 class="summary-section__title"
+                        style="margin-top: 0; margin-bottom: 20px; font-size: 1.25rem; display: flex; align-items: center; gap: 10px;">
+                        <div
+                            style="background: rgba(59, 130, 246, 0.1); padding: 8px; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                            <i data-lucide="bar-chart-2" style="width: 20px; height: 20px; color: #3b82f6;"></i>
+                        </div>
+                        All Time Summary
+                    </h2>
+                    <div class="summary-content" style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                        <!-- Chart -->
+                        <div class="summary-section__chart" id="summaryChart" style="min-height: 250px;"></div>
+
+                        <!-- Key Metrics -->
+                        <div class="summary-metrics" id="summaryMetrics"
+                            style="display: flex; flex-direction: column; justify-content: center; gap: 16px;">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- Timeline Navigation -->
             <section class="timeline" id="timelineSection" style="display: none; margin-bottom: 24px;">
                 <div class="timeline-bar"
-                    style="display: flex; align-items: center; justify-content: center; gap: 16px; background: rgba(255,255,255,0.05); padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);">
+                    style="display: flex; align-items: center; justify-content: center; gap: 16px; background: rgba(255,255,255,0.05); padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); position: relative; overflow: hidden;">
+
+                    <!-- Background Accent -->
+                    <div
+                        style="position: absolute; top: 0; left: 0; width: 100%; height: 2px; background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.5), transparent);">
+                    </div>
+
                     <button class="btn btn--icon btn--secondary" id="prevDateBtn" title="Previous Date">
                         <i data-lucide="chevron-left"></i>
                     </button>
@@ -127,6 +158,13 @@
                     <button class="btn btn--icon btn--secondary" id="nextDateBtn" title="Next Date">
                         <i data-lucide="chevron-right"></i>
                     </button>
+
+                    <div style="position: absolute; right: 12px;">
+                        <button class="btn btn--small btn--ghost" id="viewAllDatesBtn"
+                            style="font-size: 0.75rem; color: #a0a0b0; display: none;">
+                            View All
+                        </button>
+                    </div>
                 </div>
             </section>
 
@@ -147,14 +185,7 @@
                 </div>
             </section>
 
-            <!-- Combined Sentiment Analysis -->
-            <section class="summary-section" id="summarySection" style="display: none;">
-                <h2 class="summary-section__title">
-                    <i data-lucide="bar-chart-2" style="width: 20px; height: 20px;"></i>
-                    Combined Sentiment Analysis
-                </h2>
-                <div class="summary-section__chart" id="summaryChart"></div>
-            </section>
+
 
             <!-- Winner Section -->
             <section class="winner-section" id="winnerSection" style="display: none;">
