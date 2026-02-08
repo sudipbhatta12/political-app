@@ -129,30 +129,26 @@ async function generateAISummary(reportData) {
         console.log('🤖 Attempting to generate AI summary with Gemini...');
         const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
-        const prompt = `You are a political analyst generating a daily sentiment report for Nepal's political landscape.
+        const prompt = `You are a strategic political analyst for the Rastriya Swatantra Party (RSP) in Nepal.
+Your goal is to analyze the daily social media sentiment data and provide a confidential briefing for RSP leadership.
 
-Based on the following data, generate a concise, professional summary (2-3 paragraphs):
-
+Data Summary:
 Date: ${reportData.report_date}
-Total Posts Analyzed: ${reportData.total_posts_analyzed}
-Total Comments Analyzed: ${reportData.total_comments_analyzed}
+Total Posts: ${reportData.total_posts_analyzed}
+Overall Sentiment: +${reportData.overall_positive.toFixed(1)}% / -${reportData.overall_negative.toFixed(1)}% / ~${reportData.overall_neutral.toFixed(1)}%
 
-Overall Sentiment:
-- Positive: ${reportData.overall_positive.toFixed(1)}%
-- Negative: ${reportData.overall_negative.toFixed(1)}%
-- Neutral: ${reportData.overall_neutral.toFixed(1)}%
-
-Top Sources by Activity:
-${reportData.source_summaries?.slice(0, 5).map(s =>
-            `- ${s.source_name}: ${s.post_count} posts, ${s.avg_positive.toFixed(1)}% positive`
+Source Breakdown:
+${reportData.source_summaries?.slice(0, 10).map(s =>
+            `- ${s.source_name} (${s.source_type}): ${s.post_count} posts, Pos: ${s.avg_positive.toFixed(1)}%, Neg: ${s.avg_negative.toFixed(1)}%`
         ).join('\n') || 'No source data available'}
 
-Generate a professional summary highlighting:
-1. Overall political sentiment trend
-2. Notable differences between sources
-3. Key observations and implications
+Generate a strategic report (in English) covering:
+1. **RSP Performance**: Are we winning the narrative? How is RSP performing compared to key rivals (Congress, UML, Maoist)?
+2. **Key Battlegrounds**: Identify specific constituencies or platforms where RSP is gaining traction or facing backlash.
+3. **Strategic Recommendations**: Based on the sentiment, what should RSP do tomorrow? (e.g., "Amplify the corruption narrative", "Address the infrastructure complaints").
+4. **Threat Assessment**: Which rival party or media outlet is driving the most negative sentiment against us?
 
-Keep it factual and balanced. Write in English.`;
+Style: Professional, direct, and actionable. Avoid generic fluff.`;
 
         const result = await model.generateContent(prompt);
         const response = await result.response;
@@ -178,18 +174,26 @@ function generateAlgorithmicSummary(reportData) {
 
     const dateStr = formatDateDisplay(reportData.report_date);
 
-    let summary = `Political Sentiment Report for ${dateStr}\n\n`;
-    summary += `Today's analysis covered ${total_posts_analyzed} posts with ${total_comments_analyzed.toLocaleString()} comments across all monitored sources. `;
-    summary += `The overall sentiment appears ${sentimentTrend} with ${overall_positive.toFixed(1)}% positive, ${overall_negative.toFixed(1)}% negative, and ${overall_neutral.toFixed(1)}% neutral reactions.\n\n`;
+    let summary = `**RSP Daily Briefing - ${dateStr}**\n\n`;
+    summary += `**Executive Summary:**\n`;
+    summary += `Analysis of ${total_posts_analyzed} posts shows a ${sentimentTrend} trend for the day (${overall_positive.toFixed(1)}% Positive vs ${overall_negative.toFixed(1)}% Negative). \n\n`;
 
     if (reportData.source_summaries && reportData.source_summaries.length > 0) {
-        const topSource = reportData.source_summaries.sort((a, b) => b.post_count - a.post_count)[0];
-        summary += `The most active source was ${topSource.source_name} with ${topSource.post_count} posts. `;
+        // Find RSP specific data if available
+        const rspData = reportData.source_summaries.find(s => s.source_name.includes('RSP') || s.source_name.includes('Rastriya Swatantra'));
 
-        const mostPositive = reportData.source_summaries.sort((a, b) => b.avg_positive - a.avg_positive)[0];
-        if (mostPositive.source_name !== topSource.source_name) {
-            summary += `${mostPositive.source_name} showed the most positive sentiment at ${mostPositive.avg_positive.toFixed(1)}%.`;
+        if (rspData) {
+            summary += `**RSP Specifics:**\n`;
+            summary += `RSP content generates ${rspData.avg_positive.toFixed(1)}% positive sentiment. `;
+            if (rspData.avg_negative > 30) {
+                summary += `⚠️ Concern: Negative sentiment is high at ${rspData.avg_negative.toFixed(1)}%. Monitor closely.\n\n`;
+            } else {
+                summary += `Sentiment remains favorable.\n\n`;
+            }
         }
+
+        const topSource = reportData.source_summaries.sort((a, b) => b.post_count - a.post_count)[0];
+        summary += `**Market Noise:**\nThe most active discussion source is ${topSource.source_name}. `;
     }
 
     return summary;

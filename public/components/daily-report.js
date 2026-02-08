@@ -33,10 +33,12 @@ class DailyReportComponent {
                 <div class="report-header">
                     <h2 class="report-title">📊 Daily Political Analysis Report</h2>
                     <div class="report-controls">
-                    <div class="report-controls">
                         <input type="date" id="report-date-picker" class="date-picker">
                         <button id="generate-report-btn" class="btn btn-primary">
                             <span class="btn-icon">⚡</span> Generate Report
+                        </button>
+                        <button id="download-pdf-btn" class="btn btn-secondary" style="margin-left: 8px;">
+                            <span class="btn-icon">📥</span> PDF
                         </button>
                         <button id="delete-report-btn" class="btn btn-danger" style="display: none; margin-left: 8px; background: rgba(239, 68, 68, 0.1); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.2);">
                             <span class="btn-icon">🗑️</span> Delete
@@ -162,6 +164,14 @@ class DailyReportComponent {
             generateBtn.addEventListener('click', () => {
                 const date = datePicker.value;
                 this.generateReport(date);
+            });
+        }
+
+        // Download PDF button
+        const downloadBtn = document.getElementById('download-pdf-btn');
+        if (downloadBtn) {
+            downloadBtn.addEventListener('click', () => {
+                this.downloadPDF();
             });
         }
 
@@ -454,6 +464,123 @@ class DailyReportComponent {
         document.getElementById('report-no-data').style.display = 'flex';
         document.getElementById('report-content').style.display = 'none';
         document.getElementById('delete-report-btn').style.display = 'none';
+        document.getElementById('download-pdf-btn').style.display = 'none';
+    }
+
+    async downloadPDF() {
+        if (!this.currentReport) {
+            alert('No report available to download.');
+            return;
+        }
+
+        try {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const report = this.currentReport;
+
+            // Brand Colors
+            const colorPrimary = [16, 185, 129]; // Emerald 500
+            const colorDark = [30, 41, 59]; // Slate 800
+
+            // Header
+            doc.setFillColor(...colorDark);
+            doc.rect(0, 0, 210, 40, 'F');
+
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(22);
+            doc.text("Daily Political Sentiment Report", 14, 20);
+
+            doc.setFontSize(12);
+            doc.text(`RSP Confidential Briefing | ${new Date(report.report_date).toLocaleDateString()}`, 14, 30);
+
+            let yPos = 50;
+
+            // Overall Stats Grid
+            doc.setTextColor(0, 0, 0);
+            doc.setFontSize(14);
+            doc.text("Executive Overview", 14, yPos);
+            yPos += 10;
+
+            const statsData = [
+                ['Total Posts', report.total_posts_analyzed, 'Positive', `${report.overall_positive.toFixed(1)}%`],
+                ['Total Comments', report.total_comments_analyzed, 'Negative', `${report.overall_negative.toFixed(1)}%`],
+                ['Total Sources', report.total_sources, 'Neutral', `${report.overall_neutral.toFixed(1)}%`]
+            ];
+
+            doc.autoTable({
+                startY: yPos,
+                head: [],
+                body: statsData,
+                theme: 'grid',
+                styles: { fontSize: 10, cellPadding: 5 },
+                columnStyles: {
+                    0: { fontStyle: 'bold', fillColor: [241, 245, 249] },
+                    2: { fontStyle: 'bold', fillColor: [241, 245, 249] }
+                }
+            });
+
+            yPos = doc.lastAutoTable.finalY + 15;
+
+            // Summary Text
+            doc.setFontSize(14);
+            doc.text("Strategic Analysis", 14, yPos);
+            yPos += 8;
+
+            doc.setFontSize(10);
+            doc.setTextColor(50, 50, 50);
+
+            // Strip HTML tags for PDF
+            const rawSummary = (report.summary_text || "No summary available.").replace(/<[^>]*>?/gm, '');
+            const summaryLines = doc.splitTextToSize(rawSummary, 180);
+            doc.text(summaryLines, 14, yPos);
+
+            yPos += (summaryLines.length * 5) + 15;
+
+            // Add new page if needed
+            if (yPos > 240) {
+                doc.addPage();
+                yPos = 20;
+            }
+
+            // Source Breakdown
+            doc.setFontSize(14);
+            doc.setTextColor(0, 0, 0);
+            doc.text("Source Performance Breakdown", 14, yPos);
+            yPos += 6;
+
+            const sourceData = (report.source_summaries || []).map(s => [
+                s.source_name,
+                s.post_count,
+                `${s.avg_positive.toFixed(1)}%`,
+                `${s.avg_negative.toFixed(1)}%`,
+                `${s.avg_neutral.toFixed(1)}%`
+            ]);
+
+            doc.autoTable({
+                startY: yPos,
+                head: [['Source', 'Posts', 'Positive', 'Negative', 'Neutral']],
+                body: sourceData,
+                headStyles: { fillColor: colorPrimary },
+                styles: { fontSize: 9 },
+                alternateRowStyles: { fillColor: [240, 253, 244] } // Light green tint
+            });
+
+            // Footer
+            const pageCount = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(8);
+                doc.setTextColor(150);
+                doc.text(`Page ${i} of ${pageCount} - Generated via Political Assessment Tool`, 105, 290, { align: 'center' });
+            }
+
+            // Save
+            doc.save(`RSP_Daily_Report_${report.report_date}.pdf`);
+
+        } catch (error) {
+            console.error('PDF Generation Error:', error);
+            alert('Failed to generate PDF. Check console for details.');
+        }
     }
 }
 
