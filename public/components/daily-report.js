@@ -1,6 +1,14 @@
 /**
- * Daily Report Component
+ * Daily Report Component - Redesigned
  * Displays daily sentiment reports with interactive charts
+ * 
+ * Simplified structure:
+ * - init(): Setup and load initial data
+ * - render(): Build the UI
+ * - loadReport(date): Fetch and display a report
+ * - generateReport(date): Create a new report
+ * - displayReport(report): Render report data
+ * - exportPDF(): Generate PDF download
  */
 
 class DailyReportComponent {
@@ -9,54 +17,63 @@ class DailyReportComponent {
         this.currentReport = null;
         this.charts = {};
         this.userRole = localStorage.getItem('userRole') || 'viewer';
+
+        if (!this.container) {
+            console.error('❌ Daily Report container not found:', containerId);
+            return;
+        }
+
         this.init();
     }
 
     init() {
         this.render();
+        this.setupEventListeners();
         this.loadTodayReport();
-        this.applyRoleRestrictions();
-    }
-
-    applyRoleRestrictions() {
-        if (this.userRole === 'viewer') {
-            // Only hide delete button, allow generate
-            const deleteBtn = document.getElementById('delete-report-btn');
-            if (deleteBtn) deleteBtn.style.display = 'none';
-        }
     }
 
     render() {
         this.container.innerHTML = `
             <div class="daily-report-container">
-                <!-- Header with Date Selector -->
+                <!-- Header -->
                 <div class="report-header">
-                    <h2 class="report-title">📊 Daily Political Analysis Report</h2>
+                    <h2 class="report-title">📊 Daily Political Analysis</h2>
                     <div class="report-controls">
                         <input type="date" id="report-date-picker" class="date-picker">
                         <button id="generate-report-btn" class="btn btn-primary">
                             <span class="btn-icon">⚡</span> Generate Report
                         </button>
-                        <button id="download-pdf-btn" class="btn btn-secondary" style="margin-left: 8px;">
+                        <button id="refresh-report-btn" class="btn btn-secondary" style="margin-left: 8px;">
+                            <span class="btn-icon">🔄</span> Refresh
+                        </button>
+                        <button id="download-pdf-btn" class="btn btn-secondary" style="margin-left: 8px; display: none;">
                             <span class="btn-icon">📥</span> PDF
                         </button>
-                        <button id="delete-report-btn" class="btn btn-danger" style="display: none; margin-left: 8px; background: rgba(239, 68, 68, 0.1); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.2);">
+                        ${this.userRole !== 'viewer' ? `
+                        <button id="delete-report-btn" class="btn btn-danger" style="display: none; margin-left: 8px;">
                             <span class="btn-icon">🗑️</span> Delete
                         </button>
+                        ` : ''}
                     </div>
                 </div>
+
+                <!-- Status Messages -->
+                <div id="report-status" class="report-status" style="display: none;"></div>
 
                 <!-- Loading State -->
                 <div id="report-loading" class="report-loading" style="display: none;">
                     <div class="spinner"></div>
-                    <p>Generating report with AI analysis...</p>
+                    <p>Generating report...</p>
                 </div>
 
                 <!-- No Data State -->
                 <div id="report-no-data" class="report-no-data" style="display: none;">
                     <div class="no-data-icon">📭</div>
                     <h3>No Report Available</h3>
-                    <p>No data found for this date. Click "Generate Report" to create one.</p>
+                    <p id="no-data-message">No data found for this date.</p>
+                    <button id="generate-from-nodata-btn" class="btn btn-primary" style="margin-top: 16px;">
+                        <span class="btn-icon">⚡</span> Generate Report Now
+                    </button>
                 </div>
 
                 <!-- Report Content -->
@@ -71,12 +88,12 @@ class DailyReportComponent {
                         <div class="summary-card">
                             <div class="card-icon">💬</div>
                             <div class="card-value" id="total-comments">0</div>
-                            <div class="card-label">Comments Analyzed</div>
+                            <div class="card-label">Comments</div>
                         </div>
                         <div class="summary-card">
                             <div class="card-icon">📡</div>
                             <div class="card-value" id="total-sources">0</div>
-                            <div class="card-label">Sources Covered</div>
+                            <div class="card-label">Sources</div>
                         </div>
                         <div class="summary-card sentiment-positive">
                             <div class="card-icon">👍</div>
@@ -95,30 +112,30 @@ class DailyReportComponent {
                         </div>
                     </div>
 
-                    <!-- Charts Section -->
+                    <!-- Charts -->
                     <div class="charts-section">
                         <div class="chart-container">
-                            <h3>Overall Sentiment Distribution</h3>
+                            <h3>Sentiment Distribution</h3>
                             <canvas id="sentiment-pie-chart"></canvas>
                         </div>
                         <div class="chart-container">
-                            <h3>Sentiment by Source</h3>
+                            <h3>By Source</h3>
                             <canvas id="source-bar-chart"></canvas>
                         </div>
                     </div>
 
                     <!-- AI Summary -->
                     <div class="ai-summary-section">
-                        <h3>📋 AI Analysis Summary</h3>
+                        <h3>📋 Analysis Summary <span id="summary-source-badge" class="badge"></span></h3>
                         <div id="ai-summary" class="ai-summary"></div>
                     </div>
 
-                    <!-- Source Breakdown Table -->
+                    <!-- Source Table -->
                     <div class="source-breakdown">
                         <h3>📰 Source Breakdown</h3>
                         <div class="source-tabs">
                             <button class="source-tab active" data-type="all">All</button>
-                            <button class="source-tab" data-type="news_media">News Media</button>
+                            <button class="source-tab" data-type="news_media">News</button>
                             <button class="source-tab" data-type="political_party">Parties</button>
                             <button class="source-tab" data-type="candidate">Candidates</button>
                         </div>
@@ -128,17 +145,15 @@ class DailyReportComponent {
                                     <th>Source</th>
                                     <th>Type</th>
                                     <th>Posts</th>
-                                    <th>Comments</th>
                                     <th>Positive</th>
                                     <th>Negative</th>
-                                    <th>Neutral</th>
                                 </tr>
                             </thead>
                             <tbody id="source-table-body"></tbody>
                         </table>
                     </div>
 
-                    <!-- Report History -->
+                    <!-- History -->
                     <div class="report-history">
                         <h3>📅 Recent Reports</h3>
                         <div id="report-history-list" class="history-list"></div>
@@ -146,46 +161,37 @@ class DailyReportComponent {
                 </div>
             </div>
         `;
-
-        this.setupEventListeners();
     }
 
     setupEventListeners() {
-        // Date picker
         const datePicker = document.getElementById('report-date-picker');
         const today = new Date().toISOString().split('T')[0];
         datePicker.value = today;
         datePicker.max = today;
-        datePicker.addEventListener('change', (e) => this.loadReportByDate(e.target.value));
+        datePicker.addEventListener('change', (e) => this.loadReport(e.target.value));
 
-        // Generate button
-        const generateBtn = document.getElementById('generate-report-btn');
-        if (generateBtn) {
-            generateBtn.addEventListener('click', () => {
-                const date = datePicker.value;
-                this.generateReport(date);
-            });
-        }
+        document.getElementById('generate-report-btn')?.addEventListener('click', () => {
+            this.generateReport(datePicker.value);
+        });
 
-        // Download PDF button
-        const downloadBtn = document.getElementById('download-pdf-btn');
-        if (downloadBtn) {
-            downloadBtn.addEventListener('click', () => {
-                this.downloadPDF();
-            });
-        }
+        document.getElementById('refresh-report-btn')?.addEventListener('click', () => {
+            this.loadReport(datePicker.value);
+        });
 
-        // Delete button
-        const deleteBtn = document.getElementById('delete-report-btn');
-        if (deleteBtn) {
-            deleteBtn.addEventListener('click', () => {
-                if (confirm('Are you sure you want to delete this report? This action cannot be undone.')) {
-                    this.deleteCurrentReport();
-                }
-            });
-        }
+        document.getElementById('generate-from-nodata-btn')?.addEventListener('click', () => {
+            this.generateReport(datePicker.value);
+        });
 
-        // Source tabs
+        document.getElementById('download-pdf-btn')?.addEventListener('click', () => {
+            this.exportPDF();
+        });
+
+        document.getElementById('delete-report-btn')?.addEventListener('click', () => {
+            if (confirm('Delete this report? This cannot be undone.')) {
+                this.deleteReport();
+            }
+        });
+
         document.querySelectorAll('.source-tab').forEach(tab => {
             tab.addEventListener('click', (e) => {
                 document.querySelectorAll('.source-tab').forEach(t => t.classList.remove('active'));
@@ -195,13 +201,69 @@ class DailyReportComponent {
         });
     }
 
-    async loadTodayReport() {
-        const today = new Date().toISOString().split('T')[0];
-        await this.loadReportByDate(today);
+    // ============================================
+    // Status & State Management
+    // ============================================
+
+    showStatus(message, type = 'info') {
+        const statusEl = document.getElementById('report-status');
+        const colors = {
+            info: '#3B82F6',
+            success: '#10B981',
+            warning: '#F59E0B',
+            error: '#EF4444'
+        };
+
+        statusEl.innerHTML = `
+            <div style="padding: 12px 16px; background: ${colors[type]}20; border-left: 4px solid ${colors[type]}; border-radius: 4px; margin-bottom: 16px;">
+                ${message}
+            </div>
+        `;
+        statusEl.style.display = 'block';
+
+        // Auto-hide after 5 seconds for non-errors
+        if (type !== 'error') {
+            setTimeout(() => { statusEl.style.display = 'none'; }, 5000);
+        }
     }
 
-    async loadReportByDate(date) {
-        this.showLoading();
+    showLoading(message = 'Loading...') {
+        document.getElementById('report-loading').style.display = 'flex';
+        document.getElementById('report-loading').querySelector('p').textContent = message;
+        document.getElementById('report-no-data').style.display = 'none';
+        document.getElementById('report-content').style.display = 'none';
+    }
+
+    showNoData(message = 'No data found for this date.') {
+        document.getElementById('report-loading').style.display = 'none';
+        document.getElementById('report-no-data').style.display = 'flex';
+        document.getElementById('no-data-message').textContent = message;
+        document.getElementById('report-content').style.display = 'none';
+        document.getElementById('download-pdf-btn').style.display = 'none';
+        document.getElementById('delete-report-btn')?.style.setProperty('display', 'none');
+    }
+
+    showContent() {
+        document.getElementById('report-loading').style.display = 'none';
+        document.getElementById('report-no-data').style.display = 'none';
+        document.getElementById('report-content').style.display = 'block';
+        document.getElementById('download-pdf-btn').style.display = 'inline-flex';
+
+        if (this.userRole !== 'viewer') {
+            document.getElementById('delete-report-btn')?.style.setProperty('display', 'inline-flex');
+        }
+    }
+
+    // ============================================
+    // API Calls
+    // ============================================
+
+    async loadTodayReport() {
+        await this.loadReport(new Date().toISOString().split('T')[0]);
+    }
+
+    async loadReport(date) {
+        this.showLoading('Loading report...');
 
         try {
             const response = await fetch(`/api/reports/daily/${date}`, {
@@ -213,23 +275,24 @@ class DailyReportComponent {
                 if (report.id) {
                     this.currentReport = report;
                     this.displayReport(report);
+                    this.loadHistory();
                 } else {
-                    this.showNoData();
+                    this.showNoData('No report exists for this date. Click "Generate Report" to create one.');
                 }
+            } else if (response.status === 404) {
+                this.showNoData('No report exists for this date. Click "Generate Report" to create one.');
             } else {
-                this.showNoData();
+                const error = await response.json();
+                this.showNoData(error.message || 'Failed to load report.');
             }
         } catch (error) {
-            console.error('Error loading report:', error);
-            this.showNoData();
+            console.error('Load report error:', error);
+            this.showNoData('Error connecting to server. Please check your connection.');
         }
     }
 
     async generateReport(date) {
-        // Viewers allowed to generate reports now
-
-
-        this.showLoading();
+        this.showLoading('Generating report with AI analysis...');
 
         try {
             const response = await fetch('/api/reports/generate', {
@@ -244,21 +307,28 @@ class DailyReportComponent {
             const result = await response.json();
 
             if (result.success) {
-                await this.loadReportByDate(date);
+                this.showStatus('✅ Report generated successfully!', 'success');
+                await this.loadReport(date);
             } else {
-                alert(result.message || 'Failed to generate report');
-                this.showNoData();
+                // Show specific error message
+                if (result.error_code === 'MISSING_TABLE') {
+                    this.showStatus('⚠️ Database not initialized. Please run the daily_reports_schema.sql script in Supabase.', 'error');
+                } else if (result.posts_found === 0) {
+                    this.showNoData(result.message || 'No posts found for this date.');
+                } else {
+                    this.showStatus(`❌ ${result.message || 'Failed to generate report.'}`, 'error');
+                }
+                this.showNoData(result.message || 'Could not generate report.');
             }
         } catch (error) {
-            console.error('Error generating report:', error);
-            alert('Error generating report. Please try again.');
-            this.showNoData();
+            console.error('Generate report error:', error);
+            this.showStatus('❌ Error connecting to server.', 'error');
+            this.showNoData('Error connecting to server.');
         }
     }
 
-    async deleteCurrentReport() {
-        if (this.userRole === 'viewer') return;
-        if (!this.currentReport || !this.currentReport.id) return;
+    async deleteReport() {
+        if (!this.currentReport?.id) return;
 
         try {
             const response = await fetch(`/api/reports/${this.currentReport.id}`, {
@@ -267,171 +337,21 @@ class DailyReportComponent {
             });
 
             const result = await response.json();
-
             if (result.success) {
-                alert('Report deleted successfully');
+                this.showStatus('Report deleted.', 'success');
                 this.currentReport = null;
-                // Reload current date (which should now show no data)
                 const date = document.getElementById('report-date-picker').value;
-                this.loadReportByDate(date);
+                this.loadReport(date);
             } else {
-                alert(result.message || 'Failed to delete report');
+                this.showStatus(`❌ ${result.message}`, 'error');
             }
         } catch (error) {
-            console.error('Error deleting report:', error);
-            alert('Error deleting report');
+            console.error('Delete error:', error);
+            this.showStatus('❌ Failed to delete report.', 'error');
         }
     }
 
-    displayReport(report) {
-        document.getElementById('report-loading').style.display = 'none';
-        document.getElementById('report-no-data').style.display = 'none';
-        document.getElementById('report-content').style.display = 'block';
-
-        const deleteBtn = document.getElementById('delete-report-btn');
-        if (deleteBtn) {
-            deleteBtn.style.display = this.userRole === 'viewer' ? 'none' : 'inline-flex';
-        }
-
-        // Update summary cards
-        document.getElementById('total-posts').textContent = report.total_posts_analyzed?.toLocaleString() || '0';
-        document.getElementById('total-comments').textContent = report.total_comments_analyzed?.toLocaleString() || '0';
-        document.getElementById('total-sources').textContent = report.total_sources || '0';
-        document.getElementById('positive-pct').textContent = `${(report.overall_positive || 0).toFixed(1)}%`;
-        document.getElementById('negative-pct').textContent = `${(report.overall_negative || 0).toFixed(1)}%`;
-        document.getElementById('neutral-pct').textContent = `${(report.overall_neutral || 0).toFixed(1)}%`;
-
-        // Update AI summary
-        const summaryEl = document.getElementById('ai-summary');
-        summaryEl.innerHTML = this.formatSummary(report.summary_text || 'No summary available.');
-
-        // Update charts
-        this.renderCharts(report);
-
-        // Update source table
-        this.renderSourceTable(report.source_summaries || []);
-
-        // Load history
-        this.loadReportHistory();
-    }
-
-    formatSummary(text) {
-        return text.split('\n').map(p => p.trim() ? `<p>${p}</p>` : '').join('');
-    }
-
-    renderCharts(report) {
-        // Destroy existing charts
-        Object.values(this.charts).forEach(chart => chart.destroy());
-        this.charts = {};
-
-        // Sentiment Pie Chart
-        const pieCtx = document.getElementById('sentiment-pie-chart').getContext('2d');
-        this.charts.pie = new Chart(pieCtx, {
-            type: 'doughnut',
-            data: {
-                labels: ['Positive', 'Negative', 'Neutral'],
-                datasets: [{
-                    data: [
-                        report.overall_positive || 0,
-                        report.overall_negative || 0,
-                        report.overall_neutral || 0
-                    ],
-                    backgroundColor: ['#10B981', '#EF4444', '#6B7280'],
-                    borderWidth: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: { color: '#ccc', padding: 20, font: { size: 14 } }
-                    }
-                }
-            }
-        });
-
-        // Source Bar Chart
-        const summaries = report.source_summaries || [];
-        if (summaries.length > 0) {
-            const barCtx = document.getElementById('source-bar-chart').getContext('2d');
-            this.charts.bar = new Chart(barCtx, {
-                type: 'bar',
-                data: {
-                    labels: summaries.slice(0, 10).map(s => this.truncateLabel(s.source_name)),
-                    datasets: [
-                        {
-                            label: 'Positive %',
-                            data: summaries.slice(0, 10).map(s => s.avg_positive || 0),
-                            backgroundColor: '#10B981'
-                        },
-                        {
-                            label: 'Negative %',
-                            data: summaries.slice(0, 10).map(s => s.avg_negative || 0),
-                            backgroundColor: '#EF4444'
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    scales: {
-                        x: { ticks: { color: '#999' }, grid: { color: '#333' } },
-                        y: { ticks: { color: '#999' }, grid: { color: '#333' }, max: 100 }
-                    },
-                    plugins: {
-                        legend: {
-                            position: 'top',
-                            labels: { color: '#ccc', padding: 15 }
-                        }
-                    }
-                }
-            });
-        }
-    }
-
-    truncateLabel(label, maxLen = 15) {
-        if (!label) return '';
-        return label.length > maxLen ? label.substring(0, maxLen) + '...' : label;
-    }
-
-    renderSourceTable(summaries) {
-        const tbody = document.getElementById('source-table-body');
-        tbody.innerHTML = summaries.map(s => `
-            <tr data-type="${s.source_type}">
-                <td>${s.source_name || 'Unknown'}</td>
-                <td><span class="type-badge type-${s.source_type}">${this.formatSourceType(s.source_type)}</span></td>
-                <td>${s.post_count || 0}</td>
-                <td>${(s.comment_count || 0).toLocaleString()}</td>
-                <td class="positive">${(s.avg_positive || 0).toFixed(1)}%</td>
-                <td class="negative">${(s.avg_negative || 0).toFixed(1)}%</td>
-                <td class="neutral">${(s.avg_neutral || 0).toFixed(1)}%</td>
-            </tr>
-        `).join('');
-    }
-
-    formatSourceType(type) {
-        const types = {
-            'news_media': 'News',
-            'political_party': 'Party',
-            'candidate': 'Candidate'
-        };
-        return types[type] || type;
-    }
-
-    filterSourceTable(type) {
-        const rows = document.querySelectorAll('#source-table-body tr');
-        rows.forEach(row => {
-            if (type === 'all' || row.dataset.type === type) {
-                row.style.display = '';
-            } else {
-                row.style.display = 'none';
-            }
-        });
-    }
-
-    async loadReportHistory() {
+    async loadHistory() {
         try {
             const response = await fetch('/api/reports/history?limit=10', {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
@@ -439,37 +359,167 @@ class DailyReportComponent {
             const history = await response.json();
 
             const container = document.getElementById('report-history-list');
+            if (!history || history.length === 0) {
+                container.innerHTML = '<p class="no-history">No previous reports</p>';
+                return;
+            }
+
             container.innerHTML = history.map(r => `
-                <div class="history-item" onclick="dailyReport.loadReportByDate('${r.report_date}')">
+                <div class="history-item" onclick="dailyReport.loadReport('${r.report_date}')">
                     <div class="history-date">${new Date(r.report_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
                     <div class="history-stats">
                         <span>${r.total_posts_analyzed} posts</span>
-                        <span class="positive">${(r.overall_positive || 0).toFixed(0)}% +</span>
+                        <span class="positive">${(r.overall_positive || 0).toFixed(0)}%+</span>
                     </div>
                 </div>
-            `).join('') || '<p class="no-history">No reports yet</p>';
+            `).join('');
         } catch (error) {
-            console.error('Error loading history:', error);
+            console.error('Load history error:', error);
         }
     }
 
-    showLoading() {
-        document.getElementById('report-loading').style.display = 'flex';
-        document.getElementById('report-no-data').style.display = 'none';
-        document.getElementById('report-content').style.display = 'none';
+    // ============================================
+    // Display
+    // ============================================
+
+    displayReport(report) {
+        this.showContent();
+
+        // Update stats
+        document.getElementById('total-posts').textContent = (report.total_posts_analyzed || 0).toLocaleString();
+        document.getElementById('total-comments').textContent = (report.total_comments_analyzed || 0).toLocaleString();
+        document.getElementById('total-sources').textContent = report.total_sources || 0;
+        document.getElementById('positive-pct').textContent = `${(report.overall_positive || 0).toFixed(1)}%`;
+        document.getElementById('negative-pct').textContent = `${(report.overall_negative || 0).toFixed(1)}%`;
+        document.getElementById('neutral-pct').textContent = `${(report.overall_neutral || 0).toFixed(1)}%`;
+
+        // Summary
+        const summaryEl = document.getElementById('ai-summary');
+        summaryEl.innerHTML = this.formatSummary(report.summary_text || 'No summary available.');
+
+        // Show summary source badge
+        const badge = document.getElementById('summary-source-badge');
+        if (report.summary_source === 'ai') {
+            badge.textContent = '🤖 AI';
+            badge.style.background = '#10B981';
+        } else {
+            badge.textContent = '📊 Auto';
+            badge.style.background = '#6B7280';
+        }
+
+        // Charts
+        this.renderCharts(report);
+
+        // Source table
+        this.renderSourceTable(report.source_summaries || []);
     }
 
-    showNoData() {
-        document.getElementById('report-loading').style.display = 'none';
-        document.getElementById('report-no-data').style.display = 'flex';
-        document.getElementById('report-content').style.display = 'none';
-        document.getElementById('delete-report-btn').style.display = 'none';
-        document.getElementById('download-pdf-btn').style.display = 'none';
+    formatSummary(text) {
+        if (!text) return '<p>No summary available.</p>';
+
+        // Convert markdown-style formatting
+        return text
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .split('\n')
+            .filter(p => p.trim())
+            .map(p => `<p>${p}</p>`)
+            .join('');
     }
 
-    async downloadPDF() {
+    renderCharts(report) {
+        // Destroy existing
+        Object.values(this.charts).forEach(c => c?.destroy());
+        this.charts = {};
+
+        // Pie chart
+        const pieCtx = document.getElementById('sentiment-pie-chart')?.getContext('2d');
+        if (pieCtx) {
+            this.charts.pie = new Chart(pieCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Positive', 'Negative', 'Neutral'],
+                    datasets: [{
+                        data: [report.overall_positive || 0, report.overall_negative || 0, report.overall_neutral || 0],
+                        backgroundColor: ['#10B981', '#EF4444', '#6B7280'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: '#ccc', padding: 15 } }
+                    }
+                }
+            });
+        }
+
+        // Bar chart
+        const summaries = report.source_summaries || [];
+        if (summaries.length > 0) {
+            const barCtx = document.getElementById('source-bar-chart')?.getContext('2d');
+            if (barCtx) {
+                this.charts.bar = new Chart(barCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: summaries.slice(0, 8).map(s => this.truncate(s.source_name, 12)),
+                        datasets: [
+                            { label: 'Positive %', data: summaries.slice(0, 8).map(s => s.avg_positive || 0), backgroundColor: '#10B981' },
+                            { label: 'Negative %', data: summaries.slice(0, 8).map(s => s.avg_negative || 0), backgroundColor: '#EF4444' }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            x: { ticks: { color: '#999' }, grid: { color: '#333' } },
+                            y: { ticks: { color: '#999' }, grid: { color: '#333' }, max: 100 }
+                        },
+                        plugins: {
+                            legend: { position: 'top', labels: { color: '#ccc' } }
+                        }
+                    }
+                });
+            }
+        }
+    }
+
+    truncate(str, max = 15) {
+        if (!str) return '';
+        return str.length > max ? str.substring(0, max) + '...' : str;
+    }
+
+    renderSourceTable(summaries) {
+        const tbody = document.getElementById('source-table-body');
+        if (!tbody) return;
+
+        tbody.innerHTML = summaries.map(s => `
+            <tr data-type="${s.source_type}">
+                <td>${s.source_name || 'Unknown'}</td>
+                <td><span class="type-badge type-${s.source_type}">${this.formatType(s.source_type)}</span></td>
+                <td>${s.post_count || s.total_posts || 0}</td>
+                <td class="positive">${(s.avg_positive || 0).toFixed(1)}%</td>
+                <td class="negative">${(s.avg_negative || 0).toFixed(1)}%</td>
+            </tr>
+        `).join('');
+    }
+
+    formatType(type) {
+        const map = { 'news_media': 'News', 'political_party': 'Party', 'candidate': 'Candidate' };
+        return map[type] || type;
+    }
+
+    filterSourceTable(type) {
+        document.querySelectorAll('#source-table-body tr').forEach(row => {
+            row.style.display = (type === 'all' || row.dataset.type === type) ? '' : 'none';
+        });
+    }
+
+    // ============================================
+    // PDF Export
+    // ============================================
+
+    async exportPDF() {
         if (!this.currentReport) {
-            alert('No report available to download.');
+            alert('No report to export.');
             return;
         }
 
@@ -478,113 +528,88 @@ class DailyReportComponent {
             const doc = new jsPDF();
             const report = this.currentReport;
 
-            // Brand Colors
-            const colorPrimary = [16, 185, 129]; // Emerald 500
-            const colorDark = [30, 41, 59]; // Slate 800
-
             // Header
-            doc.setFillColor(...colorDark);
-            doc.rect(0, 0, 210, 40, 'F');
-
+            doc.setFillColor(30, 41, 59);
+            doc.rect(0, 0, 210, 35, 'F');
             doc.setTextColor(255, 255, 255);
-            doc.setFontSize(22);
-            doc.text("Daily Political Sentiment Report", 14, 20);
+            doc.setFontSize(20);
+            doc.text('Daily Political Sentiment Report', 14, 18);
+            doc.setFontSize(11);
+            doc.text(new Date(report.report_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }), 14, 28);
 
-            doc.setFontSize(12);
-            doc.text(`RSP Confidential Briefing | ${new Date(report.report_date).toLocaleDateString()}`, 14, 30);
+            let y = 45;
 
-            let yPos = 50;
-
-            // Overall Stats Grid
+            // Stats
             doc.setTextColor(0, 0, 0);
             doc.setFontSize(14);
-            doc.text("Executive Overview", 14, yPos);
-            yPos += 10;
-
-            const statsData = [
-                ['Total Posts', report.total_posts_analyzed, 'Positive', `${report.overall_positive.toFixed(1)}%`],
-                ['Total Comments', report.total_comments_analyzed, 'Negative', `${report.overall_negative.toFixed(1)}%`],
-                ['Total Sources', report.total_sources, 'Neutral', `${report.overall_neutral.toFixed(1)}%`]
-            ];
+            doc.text('Overview', 14, y);
+            y += 8;
 
             doc.autoTable({
-                startY: yPos,
+                startY: y,
                 head: [],
-                body: statsData,
+                body: [
+                    ['Posts Analyzed', report.total_posts_analyzed, 'Positive', `${(report.overall_positive || 0).toFixed(1)}%`],
+                    ['Comments', report.total_comments_analyzed, 'Negative', `${(report.overall_negative || 0).toFixed(1)}%`],
+                    ['Sources', report.total_sources, 'Neutral', `${(report.overall_neutral || 0).toFixed(1)}%`]
+                ],
                 theme: 'grid',
-                styles: { fontSize: 10, cellPadding: 5 },
-                columnStyles: {
-                    0: { fontStyle: 'bold', fillColor: [241, 245, 249] },
-                    2: { fontStyle: 'bold', fillColor: [241, 245, 249] }
-                }
+                styles: { fontSize: 10 },
+                columnStyles: { 0: { fontStyle: 'bold' }, 2: { fontStyle: 'bold' } }
             });
 
-            yPos = doc.lastAutoTable.finalY + 15;
+            y = doc.lastAutoTable.finalY + 12;
 
-            // Summary Text
+            // Summary
             doc.setFontSize(14);
-            doc.text("Strategic Analysis", 14, yPos);
-            yPos += 8;
+            doc.text('Analysis Summary', 14, y);
+            y += 6;
 
+            const summaryText = (report.summary_text || '').replace(/<[^>]*>/g, '').replace(/\*\*/g, '');
+            const lines = doc.splitTextToSize(summaryText, 180);
             doc.setFontSize(10);
-            doc.setTextColor(50, 50, 50);
+            doc.text(lines, 14, y);
+            y += lines.length * 5 + 10;
 
-            // Strip HTML tags for PDF
-            const rawSummary = (report.summary_text || "No summary available.").replace(/<[^>]*>?/gm, '');
-            const summaryLines = doc.splitTextToSize(rawSummary, 180);
-            doc.text(summaryLines, 14, yPos);
-
-            yPos += (summaryLines.length * 5) + 15;
-
-            // Add new page if needed
-            if (yPos > 240) {
-                doc.addPage();
-                yPos = 20;
-            }
-
-            // Source Breakdown
+            // Sources
+            if (y > 240) { doc.addPage(); y = 20; }
             doc.setFontSize(14);
-            doc.setTextColor(0, 0, 0);
-            doc.text("Source Performance Breakdown", 14, yPos);
-            yPos += 6;
+            doc.text('Source Breakdown', 14, y);
+            y += 4;
 
             const sourceData = (report.source_summaries || []).map(s => [
                 s.source_name,
-                s.post_count,
-                `${s.avg_positive.toFixed(1)}%`,
-                `${s.avg_negative.toFixed(1)}%`,
-                `${s.avg_neutral.toFixed(1)}%`
+                s.post_count || s.total_posts || 0,
+                `${(s.avg_positive || 0).toFixed(1)}%`,
+                `${(s.avg_negative || 0).toFixed(1)}%`
             ]);
 
             doc.autoTable({
-                startY: yPos,
-                head: [['Source', 'Posts', 'Positive', 'Negative', 'Neutral']],
+                startY: y,
+                head: [['Source', 'Posts', 'Positive', 'Negative']],
                 body: sourceData,
-                headStyles: { fillColor: colorPrimary },
-                styles: { fontSize: 9 },
-                alternateRowStyles: { fillColor: [240, 253, 244] } // Light green tint
+                headStyles: { fillColor: [16, 185, 129] },
+                styles: { fontSize: 9 }
             });
 
             // Footer
-            const pageCount = doc.internal.getNumberOfPages();
-            for (let i = 1; i <= pageCount; i++) {
+            const pages = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= pages; i++) {
                 doc.setPage(i);
                 doc.setFontSize(8);
                 doc.setTextColor(150);
-                doc.text(`Page ${i} of ${pageCount} - Generated via Political Assessment Tool`, 105, 290, { align: 'center' });
+                doc.text(`Page ${i}/${pages} - Political Assessment Tool`, 105, 290, { align: 'center' });
             }
 
-            // Save
-            doc.save(`RSP_Daily_Report_${report.report_date}.pdf`);
-
+            doc.save(`DailyReport_${report.report_date}.pdf`);
         } catch (error) {
-            console.error('PDF Generation Error:', error);
-            alert('Failed to generate PDF. Check console for details.');
+            console.error('PDF error:', error);
+            alert('Failed to generate PDF.');
         }
     }
 }
 
-// Initialize when DOM is ready
+// Initialize
 let dailyReport;
 document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('daily-report-container')) {

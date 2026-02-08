@@ -1,31 +1,68 @@
 /**
- * Daily Report Service
- * Generates comprehensive daily reports with AI analysis and fallback algorithms
+ * Daily Report Service - Redesigned
+ * Generates comprehensive daily reports with AI analysis
+ * 
+ * Structure:
+ * - EXPORTS: generateDailyReport, getReportByDate, getReportHistory, deleteReport, getSentimentTrends, getChartData
+ * - INTERNAL: fetchPostsForDate, calculateSentiments, generateSummary, saveReport
  */
 
 const { createClient } = require('@supabase/supabase-js');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 require('dotenv').config();
 
+// ============================================
+// Configuration
+// ============================================
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
-const supabase = createClient(supabaseUrl || 'https://placeholder.supabase.co', supabaseKey || 'placeholder-key');
 
-// Initialize Gemini AI
-const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
+if (!supabaseUrl || !supabaseKey) {
+    console.warn('⚠️ Daily Report Service: Missing Supabase credentials');
+}
+
+const supabase = createClient(
+    supabaseUrl || 'https://placeholder.supabase.co',
+    supabaseKey || 'placeholder-key'
+);
+
+// Initialize Gemini AI (optional)
+const genAI = process.env.GEMINI_API_KEY
+    ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+    : null;
+
+// ============================================
+// Helper Functions
+// ============================================
 
 /**
- * Get today's date in YYYY-MM-DD format
+ * Validate and normalize date string to YYYY-MM-DD format
  */
-function getTodayDate() {
-    return new Date().toISOString().split('T')[0];
+function normalizeDate(dateInput) {
+    if (!dateInput) {
+        // Return today's date
+        return new Date().toISOString().split('T')[0];
+    }
+
+    // If already in YYYY-MM-DD format
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+        return dateInput;
+    }
+
+    // Try to parse the date
+    const parsed = new Date(dateInput);
+    if (isNaN(parsed.getTime())) {
+        throw new Error(`Invalid date format: ${dateInput}. Use YYYY-MM-DD format.`);
+    }
+
+    return parsed.toISOString().split('T')[0];
 }
 
 /**
- * Format date for display
+ * Format date for user display
  */
-function formatDateDisplay(dateStr) {
-    const date = new Date(dateStr);
+function formatDateForDisplay(dateStr) {
+    const date = new Date(dateStr + 'T00:00:00');
     return date.toLocaleDateString('en-US', {
         weekday: 'long',
         year: 'numeric',
@@ -34,45 +71,117 @@ function formatDateDisplay(dateStr) {
     });
 }
 
+// ============================================
+// Data Fetching
+// ============================================
+
 /**
- * Get all media posts for a specific date
+ * Fetch all posts for a specific date from media_posts table
+ * Uses proper date comparison instead of ILIKE
  */
-async function getPostsForDate(date) {
-    const { data, error } = await supabase
+async function fetchMediaPostsForDate(date) {
+    console.log(`📰 Fetching media posts for ${date}...`);
+
+    // Try exact date match first
+    let { data, error } = await supabase
         .from('media_posts')
         .select('*')
-        .ilike('published_date', `${date}%`);
+        .eq('published_date', date);
 
     if (error) {
-        console.error('getPostsForDate error:', error.message);
-        return [];
+        console.error('❌ fetchMediaPostsForDate error:', error.message);
+        return { posts: [], error: error.message };
     }
-    return data || [];
+
+    // If no results, try with date range (handles datetime columns)
+    if (!data || data.length === 0) {
+        const startOfDay = `${date}T00:00:00`;
+        const endOfDay = `${date}T23:59:59`;
+
+        const rangeResult = await supabase
+            .from('media_posts')
+            .select('*')
+            .gte('published_date', startOfDay)
+            .lte('published_date', endOfDay);
+
+        if (!rangeResult.error && rangeResult.data) {
+            data = rangeResult.data;
+        }
+    }
+
+    console.log(`   Found ${data?.length || 0} media posts`);
+    return { posts: data || [], error: null };
 }
 
 /**
- * Get candidate posts for a specific date
+ * Fetch all candidate posts for a specific date from posts table
  */
-async function getCandidatePostsForDate(date) {
-    const { data, error } = await supabase
+async function fetchCandidatePostsForDate(date) {
+    console.log(`👤 Fetching candidate posts for ${date}...`);
+
+    // Try exact date match first
+    let { data, error } = await supabase
         .from('posts')
         .select(`
             *,
             candidates (id, name, party_name)
         `)
-        .ilike('published_date', `${date}%`);
+        .eq('published_date', date);
 
     if (error) {
-        console.error('getCandidatePostsForDate error:', error.message);
-        return [];
+        console.error('❌ fetchCandidatePostsForDate error:', error.message);
+        return { posts: [], error: error.message };
     }
-    return data || [];
+
+    // If no results, try with date range
+    if (!data || data.length === 0) {
+        const startOfDay = `${date}T00:00:00`;
+        const endOfDay = `${date}T23:59:59`;
+
+        const rangeResult = await supabase
+            .from('posts')
+            .select(`
+                *,
+                candidates (id, name, party_name)
+            `)
+            .gte('published_date', startOfDay)
+            .lte('published_date', endOfDay);
+
+        if (!rangeResult.error && rangeResult.data) {
+            data = rangeResult.data;
+        }
+    }
+
+    console.log(`   Found ${data?.length || 0} candidate posts`);
+    return { posts: data || [], error: null };
 }
 
 /**
- * Calculate aggregated sentiment using algorithm (fallback when AI unavailable)
+ * Fetch ALL posts for a date (combined)
  */
-function calculateSentimentAlgorithm(posts) {
+async function fetchAllPostsForDate(date) {
+    const [mediaResult, candidateResult] = await Promise.all([
+        fetchMediaPostsForDate(date),
+        fetchCandidatePostsForDate(date)
+    ]);
+
+    return {
+        mediaPosts: mediaResult.posts,
+        candidatePosts: candidateResult.posts,
+        allPosts: [...mediaResult.posts, ...candidateResult.posts],
+        errors: [mediaResult.error, candidateResult.error].filter(Boolean)
+    };
+}
+
+// ============================================
+// Sentiment Calculation
+// ============================================
+
+/**
+ * Calculate weighted sentiment from posts
+ * Uses comment volume for weighting when available
+ */
+function calculateSentiments(posts) {
     if (!posts || posts.length === 0) {
         return {
             overall_positive: 0,
@@ -86,7 +195,7 @@ function calculateSentimentAlgorithm(posts) {
     const totalComments = posts.reduce((sum, p) => sum + (p.comment_count || 0), 0);
     const totalEngagement = posts.reduce((sum, p) => sum + (p.engagement_count || 0), 0);
 
-    // Volume-weighted average
+    // If no comments, use simple average
     if (totalComments === 0) {
         const n = posts.length;
         return {
@@ -98,6 +207,7 @@ function calculateSentimentAlgorithm(posts) {
         };
     }
 
+    // Volume-weighted average
     let weightedPositive = 0, weightedNegative = 0, weightedNeutral = 0;
 
     for (const p of posts) {
@@ -116,93 +226,14 @@ function calculateSentimentAlgorithm(posts) {
     };
 }
 
-/**
- * Generate AI summary for the report
- */
-async function generateAISummary(reportData) {
-    if (!genAI) {
-        console.log('AI unavailable, using algorithmic summary');
-        return generateAlgorithmicSummary(reportData);
-    }
-
-    try {
-        console.log('🤖 Attempting to generate AI summary with Gemini...');
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-
-        const prompt = `You are a strategic political analyst for the Rastriya Swatantra Party (RSP) in Nepal.
-Your goal is to analyze the daily social media sentiment data and provide a confidential briefing for RSP leadership.
-
-Data Summary:
-Date: ${reportData.report_date}
-Total Posts: ${reportData.total_posts_analyzed}
-Overall Sentiment: +${reportData.overall_positive.toFixed(1)}% / -${reportData.overall_negative.toFixed(1)}% / ~${reportData.overall_neutral.toFixed(1)}%
-
-Source Breakdown:
-${reportData.source_summaries?.slice(0, 10).map(s =>
-            `- ${s.source_name} (${s.source_type}): ${s.post_count} posts, Pos: ${s.avg_positive.toFixed(1)}%, Neg: ${s.avg_negative.toFixed(1)}%`
-        ).join('\n') || 'No source data available'}
-
-Generate a strategic report (in English) covering:
-1. **RSP Performance**: Are we winning the narrative? How is RSP performing compared to key rivals (Congress, UML, Maoist)?
-2. **Key Battlegrounds**: Identify specific constituencies or platforms where RSP is gaining traction or facing backlash.
-3. **Strategic Recommendations**: Based on the sentiment, what should RSP do tomorrow? (e.g., "Amplify the corruption narrative", "Address the infrastructure complaints").
-4. **Threat Assessment**: Which rival party or media outlet is driving the most negative sentiment against us?
-
-Style: Professional, direct, and actionable. Avoid generic fluff.`;
-
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        return response.text();
-    } catch (error) {
-        console.error('AI summary generation failed:', error.message);
-        return generateAlgorithmicSummary(reportData);
-    }
-}
+// ============================================
+// Source Summaries
+// ============================================
 
 /**
- * Fallback algorithmic summary when AI is unavailable
+ * Generate per-source breakdowns
  */
-function generateAlgorithmicSummary(reportData) {
-    console.log('⚠️ Using Fallback Algorithmic Summary');
-    const { overall_positive, overall_negative, overall_neutral, total_posts_analyzed, total_comments_analyzed } = reportData;
-
-    let sentimentTrend = 'neutral';
-    if (overall_positive > overall_negative + 10) sentimentTrend = 'positive';
-    else if (overall_negative > overall_positive + 10) sentimentTrend = 'negative';
-    else if (overall_positive > overall_negative) sentimentTrend = 'slightly positive';
-    else if (overall_negative > overall_positive) sentimentTrend = 'slightly negative';
-
-    const dateStr = formatDateDisplay(reportData.report_date);
-
-    let summary = `**RSP Daily Briefing - ${dateStr}**\n\n`;
-    summary += `**Executive Summary:**\n`;
-    summary += `Analysis of ${total_posts_analyzed} posts shows a ${sentimentTrend} trend for the day (${overall_positive.toFixed(1)}% Positive vs ${overall_negative.toFixed(1)}% Negative). \n\n`;
-
-    if (reportData.source_summaries && reportData.source_summaries.length > 0) {
-        // Find RSP specific data if available
-        const rspData = reportData.source_summaries.find(s => s.source_name.includes('RSP') || s.source_name.includes('Rastriya Swatantra'));
-
-        if (rspData) {
-            summary += `**RSP Specifics:**\n`;
-            summary += `RSP content generates ${rspData.avg_positive.toFixed(1)}% positive sentiment. `;
-            if (rspData.avg_negative > 30) {
-                summary += `⚠️ Concern: Negative sentiment is high at ${rspData.avg_negative.toFixed(1)}%. Monitor closely.\n\n`;
-            } else {
-                summary += `Sentiment remains favorable.\n\n`;
-            }
-        }
-
-        const topSource = reportData.source_summaries.sort((a, b) => b.post_count - a.post_count)[0];
-        summary += `**Market Noise:**\nThe most active discussion source is ${topSource.source_name}. `;
-    }
-
-    return summary;
-}
-
-/**
- * Group posts by source for summary generation
- */
-async function generateSourceSummaries(mediaPosts, candidatePosts, date) {
+async function generateSourceSummaries(mediaPosts, candidatePosts) {
     const summaries = [];
 
     // Group media posts by source
@@ -219,10 +250,10 @@ async function generateSourceSummaries(mediaPosts, candidatePosts, date) {
         mediaBySource[key].posts.push(post);
     }
 
-    // Get source names and calculate summaries
+    // Process each source group
     for (const key of Object.keys(mediaBySource)) {
         const group = mediaBySource[key];
-        const sentiment = calculateSentimentAlgorithm(group.posts);
+        const sentiment = calculateSentiments(group.posts);
 
         // Get source name
         let sourceName = 'Unknown';
@@ -247,7 +278,7 @@ async function generateSourceSummaries(mediaPosts, candidatePosts, date) {
         });
     }
 
-    // Add candidate summaries (aggregate by party)
+    // Group candidate posts by party
     const candidatesByParty = {};
     for (const post of candidatePosts) {
         const partyName = post.candidates?.party_name || 'Independent';
@@ -259,7 +290,7 @@ async function generateSourceSummaries(mediaPosts, candidatePosts, date) {
 
     for (const partyName of Object.keys(candidatesByParty)) {
         const partyPosts = candidatesByParty[partyName];
-        const sentiment = calculateSentimentAlgorithm(partyPosts);
+        const sentiment = calculateSentiments(partyPosts);
 
         summaries.push({
             source_type: 'candidate',
@@ -277,214 +308,307 @@ async function generateSourceSummaries(mediaPosts, candidatePosts, date) {
     return summaries;
 }
 
+// ============================================
+// Summary Generation
+// ============================================
+
+/**
+ * Generate AI-powered summary (with fallback)
+ */
+async function generateSummary(reportData) {
+    // Try AI summary first
+    if (genAI) {
+        try {
+            console.log('🤖 Generating AI summary...');
+            const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
+            const prompt = `You are a strategic political analyst for Nepal.
+Analyze this daily social media sentiment data and provide a brief strategic briefing.
+
+Data Summary:
+- Date: ${reportData.report_date}
+- Total Posts Analyzed: ${reportData.total_posts_analyzed}
+- Overall Sentiment: ${reportData.overall_positive.toFixed(1)}% Positive / ${reportData.overall_negative.toFixed(1)}% Negative / ${reportData.overall_neutral.toFixed(1)}% Neutral
+
+Top Sources:
+${reportData.source_summaries?.slice(0, 5).map(s =>
+                `- ${s.source_name}: ${s.post_count} posts (${s.avg_positive.toFixed(1)}% positive, ${s.avg_negative.toFixed(1)}% negative)`
+            ).join('\n') || 'No source data available'}
+
+Provide:
+1. Key Takeaway (1-2 sentences)
+2. Notable Trends
+3. Recommended Actions (if any)
+
+Keep it brief and actionable.`;
+
+            const result = await model.generateContent(prompt);
+            const response = await result.response;
+            console.log('✅ AI summary generated');
+            return { text: response.text(), source: 'ai' };
+        } catch (error) {
+            console.error('⚠️ AI summary failed:', error.message);
+            // Fall through to algorithmic summary
+        }
+    }
+
+    // Fallback: Algorithmic summary
+    console.log('📊 Using algorithmic summary...');
+    return {
+        text: generateAlgorithmicSummary(reportData),
+        source: 'algorithm'
+    };
+}
+
+/**
+ * Generate a simple algorithmic summary
+ */
+function generateAlgorithmicSummary(reportData) {
+    const { overall_positive, overall_negative, total_posts_analyzed, report_date } = reportData;
+    const dateDisplay = formatDateForDisplay(report_date);
+
+    let trend = 'neutral';
+    if (overall_positive > overall_negative + 10) trend = 'positive';
+    else if (overall_negative > overall_positive + 10) trend = 'negative';
+    else if (overall_positive > overall_negative) trend = 'slightly positive';
+    else if (overall_negative > overall_positive) trend = 'slightly negative';
+
+    let summary = `**Daily Summary - ${dateDisplay}**\n\n`;
+    summary += `Analyzed ${total_posts_analyzed} posts. Overall sentiment is ${trend} `;
+    summary += `(${overall_positive.toFixed(1)}% positive vs ${overall_negative.toFixed(1)}% negative).\n\n`;
+
+    if (reportData.source_summaries && reportData.source_summaries.length > 0) {
+        const topSource = reportData.source_summaries.sort((a, b) => b.post_count - a.post_count)[0];
+        summary += `Most active source: ${topSource.source_name} with ${topSource.post_count} posts.`;
+    }
+
+    return summary;
+}
+
+// ============================================
+// Database Operations
+// ============================================
+
+/**
+ * Save or update report in database
+ */
+async function saveReport(reportData) {
+    const { report_date, total_posts_analyzed, total_comments_analyzed, total_sources,
+        overall_positive, overall_negative, overall_neutral, summary_text, source_summaries } = reportData;
+
+    // Check if report exists
+    const { data: existing } = await supabase
+        .from('daily_reports')
+        .select('id')
+        .eq('report_date', report_date)
+        .single();
+
+    let reportId;
+
+    if (existing) {
+        // Update existing
+        const { error } = await supabase
+            .from('daily_reports')
+            .update({
+                total_posts_analyzed,
+                total_comments_analyzed,
+                total_sources,
+                overall_positive,
+                overall_negative,
+                overall_neutral,
+                summary_text,
+                generated_at: new Date().toISOString()
+            })
+            .eq('id', existing.id);
+
+        if (error) {
+            console.error('❌ Update report error:', error.message);
+            return { success: false, error: error.message };
+        }
+
+        reportId = existing.id;
+
+        // Delete old summaries
+        await supabase.from('report_summaries').delete().eq('report_id', reportId);
+    } else {
+        // Create new
+        const { data: newReport, error } = await supabase
+            .from('daily_reports')
+            .insert({
+                report_date,
+                total_posts_analyzed,
+                total_comments_analyzed,
+                total_sources,
+                overall_positive,
+                overall_negative,
+                overall_neutral,
+                summary_text
+            })
+            .select('id')
+            .single();
+
+        if (error) {
+            // Check for missing table
+            if (error.message.includes('does not exist') || error.code === '42P01') {
+                return {
+                    success: false,
+                    error: 'Database tables not initialized. Please run the daily_reports_schema.sql script.',
+                    error_code: 'MISSING_TABLE'
+                };
+            }
+            console.error('❌ Create report error:', error.message);
+            return { success: false, error: error.message };
+        }
+
+        reportId = newReport.id;
+    }
+
+    // Insert source summaries
+    for (const summary of source_summaries || []) {
+        await supabase.from('report_summaries').insert({
+            report_id: reportId,
+            source_type: summary.source_type,
+            source_id: summary.source_id,
+            source_name: summary.source_name,
+            total_posts: summary.post_count,
+            total_comments: summary.comment_count,
+            avg_positive: summary.avg_positive,
+            avg_negative: summary.avg_negative,
+            avg_neutral: summary.avg_neutral
+        });
+    }
+
+    return { success: true, reportId };
+}
+
+// ============================================
+// EXPORTED FUNCTIONS
+// ============================================
+
 module.exports = {
     /**
      * Generate daily report for a specific date
+     * @param {string} date - Date in YYYY-MM-DD format (optional, defaults to today)
      */
     generateDailyReport: async (date = null) => {
-        const targetDate = date || getTodayDate();
-        console.log(`📊 Generating daily report for ${targetDate}...`);
+        try {
+            const targetDate = normalizeDate(date);
+            console.log(`\n📊 ========================================`);
+            console.log(`📊 GENERATING DAILY REPORT: ${targetDate}`);
+            console.log(`📊 ========================================\n`);
 
-        // Get all posts for the date
-        const mediaPosts = await getPostsForDate(targetDate);
-        const candidatePosts = await getCandidatePostsForDate(targetDate);
-        const allPosts = [...mediaPosts, ...candidatePosts];
+            // Fetch all posts
+            const { mediaPosts, candidatePosts, allPosts, errors } = await fetchAllPostsForDate(targetDate);
 
-        if (allPosts.length === 0) {
-            console.log('No posts found for this date');
+            if (errors.length > 0) {
+                console.warn('⚠️ Some errors occurred while fetching:', errors);
+            }
+
+            if (allPosts.length === 0) {
+                console.log('❌ No posts found for this date');
+                return {
+                    success: false,
+                    message: `No posts found for ${formatDateForDisplay(targetDate)}. Try a different date or add some posts first.`,
+                    report_date: targetDate,
+                    posts_found: 0
+                };
+            }
+
+            console.log(`✅ Found ${allPosts.length} total posts (${mediaPosts.length} media, ${candidatePosts.length} candidate)`);
+
+            // Calculate sentiments
+            const overallSentiment = calculateSentiments(allPosts);
+
+            // Count unique sources
+            const uniqueSources = new Set(mediaPosts.map(p => `${p.source_type}_${p.source_id}`));
+            const totalSources = uniqueSources.size + (candidatePosts.length > 0 ? 1 : 0);
+
+            // Generate source summaries
+            const sourceSummaries = await generateSourceSummaries(mediaPosts, candidatePosts);
+
+            // Build report data
+            const reportData = {
+                report_date: targetDate,
+                total_posts_analyzed: allPosts.length,
+                total_comments_analyzed: overallSentiment.total_comments,
+                total_sources: totalSources,
+                overall_positive: overallSentiment.overall_positive,
+                overall_negative: overallSentiment.overall_negative,
+                overall_neutral: overallSentiment.overall_neutral,
+                source_summaries: sourceSummaries
+            };
+
+            // Generate summary
+            const summary = await generateSummary(reportData);
+            reportData.summary_text = summary.text;
+            reportData.summary_source = summary.source;
+
+            // Save to database
+            const saveResult = await saveReport(reportData);
+
+            if (!saveResult.success) {
+                return {
+                    success: false,
+                    message: saveResult.error,
+                    error_code: saveResult.error_code,
+                    report_date: targetDate
+                };
+            }
+
+            console.log(`\n✅ Report generated successfully (ID: ${saveResult.reportId})`);
+            console.log(`📊 ========================================\n`);
+
+            return {
+                success: true,
+                report_id: saveResult.reportId,
+                ...reportData
+            };
+
+        } catch (error) {
+            console.error('❌ generateDailyReport error:', error);
             return {
                 success: false,
-                message: 'No data available for this date',
-                report_date: targetDate
+                message: error.message,
+                report_date: date
             };
         }
-
-        // Calculate overall sentiment
-        const overallSentiment = calculateSentimentAlgorithm(allPosts);
-
-        // Count unique sources
-        const uniqueSources = new Set(mediaPosts.map(p => `${p.source_type}_${p.source_id}`));
-        const totalSources = uniqueSources.size + (candidatePosts.length > 0 ? 1 : 0);
-
-        // Generate source summaries
-        const sourceSummaries = await generateSourceSummaries(mediaPosts, candidatePosts, targetDate);
-
-        // Prepare report data
-        const reportData = {
-            report_date: targetDate,
-            total_posts_analyzed: allPosts.length,
-            total_comments_analyzed: overallSentiment.total_comments,
-            total_sources: totalSources,
-            overall_positive: overallSentiment.overall_positive,
-            overall_negative: overallSentiment.overall_negative,
-            overall_neutral: overallSentiment.overall_neutral,
-            source_summaries: sourceSummaries
-        };
-
-        // Generate AI summary (with fallback)
-        const summaryText = await generateAISummary(reportData);
-        reportData.summary_text = summaryText;
-
-        // Check if report already exists
-        const { data: existing } = await supabase
-            .from('daily_reports')
-            .select('id')
-            .eq('report_date', targetDate)
-            .single();
-
-        let reportId;
-
-        if (existing) {
-            // Update existing report
-            const { error } = await supabase
-                .from('daily_reports')
-                .update({
-                    total_posts_analyzed: reportData.total_posts_analyzed,
-                    total_comments_analyzed: reportData.total_comments_analyzed,
-                    total_sources: reportData.total_sources,
-                    overall_positive: reportData.overall_positive,
-                    overall_negative: reportData.overall_negative,
-                    overall_neutral: reportData.overall_neutral,
-                    summary_text: reportData.summary_text,
-                    generated_at: new Date().toISOString()
-                })
-                .eq('id', existing.id);
-
-            if (error) {
-                console.error('Update report error:', error.message);
-                return { success: false, message: error.message };
-            }
-
-            reportId = existing.id;
-
-            // Delete old summaries
-            await supabase.from('report_summaries').delete().eq('report_id', reportId);
-        } else {
-            // Create new report
-            const { data: newReport, error } = await supabase
-                .from('daily_reports')
-                .insert({
-                    report_date: targetDate,
-                    total_posts_analyzed: reportData.total_posts_analyzed,
-                    total_comments_analyzed: reportData.total_comments_analyzed,
-                    total_sources: reportData.total_sources,
-                    overall_positive: reportData.overall_positive,
-                    overall_negative: reportData.overall_negative,
-                    overall_neutral: reportData.overall_neutral,
-                    summary_text: reportData.summary_text
-                })
-                .select('id')
-                .single();
-
-            if (error) {
-                // Check if error is due to missing table
-                if (error.message.includes('relation "public.daily_reports" does not exist') ||
-                    error.code === '42P01') {
-                    return {
-                        success: false,
-                        error_code: 'MISSING_TABLE',
-                        message: 'Database not initialized',
-                        sql: `CREATE TABLE IF NOT EXISTS daily_reports (
-    id SERIAL PRIMARY KEY,
-    report_date DATE NOT NULL UNIQUE,
-    total_posts_analyzed INTEGER DEFAULT 0,
-    total_comments_analyzed INTEGER DEFAULT 0,
-    total_sources INTEGER DEFAULT 0,
-    overall_positive REAL DEFAULT 0,
-    overall_negative REAL DEFAULT 0,
-    overall_neutral REAL DEFAULT 0,
-    summary_text TEXT,
-    generated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS report_summaries (
-    id SERIAL PRIMARY KEY,
-    report_id INTEGER NOT NULL REFERENCES daily_reports(id) ON DELETE CASCADE,
-    source_type TEXT CHECK (source_type = ANY (ARRAY['candidate'::text, 'news_media'::text, 'political_party'::text])),
-    source_id INTEGER,
-    source_name TEXT,
-    total_posts INTEGER DEFAULT 0,
-    total_comments INTEGER DEFAULT 0,
-    avg_positive REAL DEFAULT 0,
-    avg_negative REAL DEFAULT 0,
-    avg_neutral REAL DEFAULT 0,
-    key_topics TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-ALTER TABLE daily_reports ENABLE ROW LEVEL SECURITY;
-ALTER TABLE report_summaries ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "allow_public_read_daily_reports" ON daily_reports FOR SELECT USING (true);
-CREATE POLICY "allow_public_read_report_summaries" ON report_summaries FOR SELECT USING (true);
-CREATE POLICY "allow_insert_daily_reports" ON daily_reports FOR INSERT WITH CHECK (true);
-CREATE POLICY "allow_update_daily_reports" ON daily_reports FOR UPDATE USING (true);
-CREATE POLICY "allow_insert_report_summaries" ON report_summaries FOR INSERT WITH CHECK (true);
-CREATE POLICY "allow_delete_report_summaries" ON report_summaries FOR DELETE USING (true);`
-                    };
-                }
-
-                console.error('Create report error:', error.message);
-                return { success: false, message: error.message };
-            }
-
-            reportId = newReport.id;
-        }
-
-        // Insert source summaries
-        for (const summary of sourceSummaries) {
-            await supabase.from('report_summaries').insert({
-                report_id: reportId,
-                source_type: summary.source_type,
-                source_id: summary.source_id,
-                source_name: summary.source_name,
-                avg_positive: summary.avg_positive,
-                avg_negative: summary.avg_negative,
-                avg_neutral: summary.avg_neutral,
-                post_count: summary.post_count,
-                comment_count: summary.comment_count,
-                engagement_count: summary.engagement_count
-            });
-        }
-
-        console.log(`✅ Daily report generated successfully (ID: ${reportId})`);
-
-        return {
-            success: true,
-            report_id: reportId,
-            ...reportData
-        };
     },
 
     /**
      * Get report by date
      */
     getReportByDate: async (date) => {
-        const { data: report, error } = await supabase
-            .from('daily_reports')
-            .select('*')
-            .eq('report_date', date)
-            .single();
+        try {
+            const targetDate = normalizeDate(date);
 
-        if (error && error.code !== 'PGRST116') {
-            console.error('getReportByDate error:', error.message);
+            const { data: report, error } = await supabase
+                .from('daily_reports')
+                .select('*')
+                .eq('report_date', targetDate)
+                .single();
+
+            if (error && error.code !== 'PGRST116') {
+                console.error('getReportByDate error:', error.message);
+                return null;
+            }
+
+            if (!report) return null;
+
+            // Get summaries
+            const { data: summaries } = await supabase
+                .from('report_summaries')
+                .select('*')
+                .eq('report_id', report.id)
+                .order('total_posts', { ascending: false });
+
+            return {
+                ...report,
+                source_summaries: summaries || []
+            };
+        } catch (error) {
+            console.error('getReportByDate exception:', error);
             return null;
         }
-
-        if (!report) return null;
-
-        // Get summaries
-        const { data: summaries } = await supabase
-            .from('report_summaries')
-            .select('*')
-            .eq('report_id', report.id)
-            .order('post_count', { ascending: false });
-
-        return {
-            ...report,
-            source_summaries: summaries || []
-        };
     },
 
     /**
@@ -522,31 +646,19 @@ CREATE POLICY "allow_delete_report_summaries" ON report_summaries FOR DELETE USI
             .select('*')
             .eq('report_id', reportId);
 
-        // Prepare chart data
         return {
-            // Pie chart - overall sentiment
             sentimentPie: {
                 labels: ['Positive', 'Negative', 'Neutral'],
                 data: [report.overall_positive, report.overall_negative, report.overall_neutral],
                 colors: ['#10B981', '#EF4444', '#6B7280']
             },
-            // Bar chart - by source type
             sourceBar: {
                 labels: (summaries || []).map(s => s.source_name),
                 datasets: [
-                    {
-                        label: 'Positive %',
-                        data: (summaries || []).map(s => s.avg_positive),
-                        color: '#10B981'
-                    },
-                    {
-                        label: 'Negative %',
-                        data: (summaries || []).map(s => s.avg_negative),
-                        color: '#EF4444'
-                    }
+                    { label: 'Positive %', data: (summaries || []).map(s => s.avg_positive), color: '#10B981' },
+                    { label: 'Negative %', data: (summaries || []).map(s => s.avg_negative), color: '#EF4444' }
                 ]
             },
-            // Summary stats
             stats: {
                 total_posts: report.total_posts_analyzed,
                 total_comments: report.total_comments_analyzed,
@@ -574,21 +686,9 @@ CREATE POLICY "allow_delete_report_summaries" ON report_summaries FOR DELETE USI
         return {
             labels: (data || []).map(d => d.report_date),
             datasets: [
-                {
-                    label: 'Positive',
-                    data: (data || []).map(d => d.overall_positive),
-                    color: '#10B981'
-                },
-                {
-                    label: 'Negative',
-                    data: (data || []).map(d => d.overall_negative),
-                    color: '#EF4444'
-                },
-                {
-                    label: 'Neutral',
-                    data: (data || []).map(d => d.overall_neutral),
-                    color: '#6B7280'
-                }
+                { label: 'Positive', data: (data || []).map(d => d.overall_positive), color: '#10B981' },
+                { label: 'Negative', data: (data || []).map(d => d.overall_negative), color: '#EF4444' },
+                { label: 'Neutral', data: (data || []).map(d => d.overall_neutral), color: '#6B7280' }
             ]
         };
     },
@@ -597,7 +697,6 @@ CREATE POLICY "allow_delete_report_summaries" ON report_summaries FOR DELETE USI
      * Delete a report by ID
      */
     deleteReport: async (id) => {
-        // Summaries are deleted via CASCADE
         const { error } = await supabase
             .from('daily_reports')
             .delete()
