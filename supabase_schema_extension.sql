@@ -58,10 +58,23 @@ ALTER TABLE political_parties ENABLE ROW LEVEL SECURITY;
 ALTER TABLE news_media ENABLE ROW LEVEL SECURITY;
 ALTER TABLE media_posts ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Allow public read" ON political_parties;
 CREATE POLICY "Allow public read" ON political_parties FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Allow public read" ON news_media;
 CREATE POLICY "Allow public read" ON news_media FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Allow public read" ON media_posts;
 CREATE POLICY "Allow public read" ON media_posts FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Allow authenticated insert" ON political_parties;
 CREATE POLICY "Allow authenticated insert" ON political_parties FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Allow authenticated update" ON political_parties;
 CREATE POLICY "Allow authenticated update" ON political_parties FOR UPDATE USING (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Allow authenticated insert" ON news_media;
 CREATE POLICY "Allow authenticated insert" ON news_media FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Allow authenticated update" ON news_media;
 CREATE POLICY "Allow authenticated update" ON news_media FOR UPDATE USING (auth.role() = 'authenticated');

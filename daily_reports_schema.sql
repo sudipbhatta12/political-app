@@ -39,22 +39,28 @@ ALTER TABLE daily_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE report_summaries ENABLE ROW LEVEL SECURITY;
 
 -- Allow public read access (for viewing reports)
+DROP POLICY IF EXISTS "allow_public_read_daily_reports" ON daily_reports;
 CREATE POLICY "allow_public_read_daily_reports" ON daily_reports
     FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "allow_public_read_report_summaries" ON report_summaries;
 CREATE POLICY "allow_public_read_report_summaries" ON report_summaries
     FOR SELECT USING (true);
 
 -- Allow authenticated users to create/update reports
+DROP POLICY IF EXISTS "allow_insert_daily_reports" ON daily_reports;
 CREATE POLICY "allow_insert_daily_reports" ON daily_reports
     FOR INSERT WITH CHECK (true);
 
+DROP POLICY IF EXISTS "allow_update_daily_reports" ON daily_reports;
 CREATE POLICY "allow_update_daily_reports" ON daily_reports
     FOR UPDATE USING (true);
 
+DROP POLICY IF EXISTS "allow_insert_report_summaries" ON report_summaries;
 CREATE POLICY "allow_insert_report_summaries" ON report_summaries
     FOR INSERT WITH CHECK (true);
 
+DROP POLICY IF EXISTS "allow_delete_report_summaries" ON report_summaries;
 CREATE POLICY "allow_delete_report_summaries" ON report_summaries
     FOR DELETE USING (true);
 

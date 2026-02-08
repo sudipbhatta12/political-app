@@ -1,7 +1,8 @@
 -- Seed Data for Political Parties and News Media
 -- Run this AFTER running supabase_schema_extension.sql
+-- Uses ON CONFLICT to prevent duplicate entries
 
--- Insert Political Parties
+-- Insert Political Parties (skip if already exists based on name_en)
 INSERT INTO political_parties (name_en, name_np, abbreviation, website_url, facebook_url, is_active) VALUES
 ('Nepali Congress', 'नेपाली कांग्रेस', 'NC', 'https://nepalicongress.org', 'https://www.facebook.com/khatranepalicongress', true),
 ('CPN (UML)', 'नेकपा (एमाले)', 'UML', 'https://cpnuml.org', 'https://www.facebook.com/cpnuml', true),
@@ -12,9 +13,10 @@ INSERT INTO political_parties (name_en, name_np, abbreviation, website_url, face
 ('Janata Samajbadi Party', 'जनता समाजवादी पार्टी', 'JSP', 'https://jspnepal.org', 'https://www.facebook.com/jspnepal', true),
 ('Loktantrik Samajbadi Party', 'लोकतान्त्रिक समाजवादी पार्टी', 'LSP', 'https://lspnepal.org', 'https://www.facebook.com/lspnepal', true),
 ('Nagarik Unmukti Party', 'नागरिक उन्मुक्ति पार्टी', 'NUP', NULL, 'https://www.facebook.com/nagarikunmukti', true),
-('Janamat Party', 'जनमत पार्टी', 'Janamat', 'https://janamatparty.org', 'https://www.facebook.com/janamatparty', true);
+('Janamat Party', 'जनमत पार्टी', 'Janamat', 'https://janamatparty.org', 'https://www.facebook.com/janamatparty', true)
+ON CONFLICT (name_en) DO NOTHING;
 
--- Insert News Media
+-- Insert News Media (skip if already exists based on name_en)
 INSERT INTO news_media (name_en, name_np, website_url, facebook_url, twitter_url, youtube_url, is_active) VALUES
 ('Kantipur Daily', 'कान्तिपुर दैनिक', 'https://ekantipur.com', 'https://www.facebook.com/ekantipur', 'https://twitter.com/ekantipur_com', 'https://www.youtube.com/user/kantipur', true),
 ('OnlineKhabar', 'अनलाइनखबर', 'https://www.onlinekhabar.com', 'https://www.facebook.com/onlinekhabarnews', 'https://twitter.com/OnlineKhabar', 'https://www.youtube.com/c/onlinekhabarnepal', true),
@@ -26,4 +28,5 @@ INSERT INTO news_media (name_en, name_np, website_url, facebook_url, twitter_url
 ('The Himalayan Times', 'द हिमालयन टाइम्स', 'https://thehimalayantimes.com', 'https://www.facebook.com/TheHimalayanTimesOnline', 'https://twitter.com/thehimalayan', NULL, true),
 ('Republica', 'रिपब्लिका', 'https://myrepublica.nagariknetwork.com', 'https://www.facebook.com/myrepublica', 'https://twitter.com/RepublicaNepal', NULL, true),
 ('Ujyaalo Online', 'उज्यालो अनलाइन', 'https://ujyaaloonline.com', 'https://www.facebook.com/UjyaaloOnline', 'https://twitter.com/Ujyaalo', 'https://www.youtube.com/user/UjyaaloNetwork', true),
-('BBC Nepali', 'बीबीसी नेपाली', 'https://www.bbc.com/nepali', 'https://www.facebook.com/bbcnepali', 'https://twitter.com/bbcnepali', 'https://www.youtube.com/user/bbcnepali', true);
+('BBC Nepali', 'बीबीसी नेपाली', 'https://www.bbc.com/nepali', 'https://www.facebook.com/bbcnepali', 'https://twitter.com/bbcnepali', 'https://www.youtube.com/user/bbcnepali', true)
+ON CONFLICT (name_en) DO NOTHING;

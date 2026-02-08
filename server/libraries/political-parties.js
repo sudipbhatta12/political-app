@@ -47,7 +47,16 @@ module.exports = {
             const { data: posts } = await query;
 
             const sentiment = module.exports.calculateSentiment(posts || []);
-            results.push({ ...party, sentiment });
+            // Flatten sentiment into the result for frontend compatibility
+            results.push({
+                ...party,
+                posts_count: sentiment.post_count,
+                avg_positive: sentiment.avg_positive,
+                avg_negative: sentiment.avg_negative,
+                avg_neutral: sentiment.avg_neutral,
+                total_comments: sentiment.comment_count,
+                sentiment // Keep nested object for backward compatibility
+            });
         }
         return results;
     },

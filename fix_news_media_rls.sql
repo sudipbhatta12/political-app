@@ -3,6 +3,7 @@ ALTER TABLE news_media ENABLE ROW LEVEL SECURITY;
 
 -- Allow anonymous users (public role) to insert new news sources
 -- This is necessary because the verified frontend "Add New News Source" feature creates new entries.
+DROP POLICY IF EXISTS "Allow public insert" ON news_media;
 CREATE POLICY "Allow public insert" ON news_media FOR INSERT WITH CHECK (true);
 
 -- Allow public read access (select) to news_media is likely already there, but good to ensure
