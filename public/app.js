@@ -172,10 +172,9 @@ const elements = {
     remarksModalClose: document.getElementById('remarksModalClose'),
     remarksContent: document.getElementById('remarksContent'),
 
-    // Library Modal
+    // Library View (was Library Modal)
     libraryBtn: document.getElementById('libraryBtn'),
-    libraryModal: document.getElementById('libraryModal'),
-    libraryModalClose: document.getElementById('libraryModalClose'),
+    libraryView: document.getElementById('library-view'),
     libraryTableBody: document.getElementById('libraryTableBody'),
     libraryCount: document.getElementById('libraryCount'),
     libraryEmpty: document.getElementById('libraryEmpty'),
@@ -2962,8 +2961,8 @@ function initLibraryTabs() {
 // Candidates Library Load (New)
 // ============================================
 async function loadCandidatesLibrary() {
-    // Check if we are in library modal
-    if (!elements.libraryModal.classList.contains('active')) return;
+    // Check if library view is active
+    if (!elements.libraryView || elements.libraryView.style.display === 'none') return;
 
     elements.libraryLoading = true; // Optional flag
 
