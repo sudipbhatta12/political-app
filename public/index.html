@@ -21,6 +21,8 @@
     <!-- Styles -->
     <link rel="stylesheet" href="index.css">
     <link rel="stylesheet" href="components/components.css">
+    <link rel="stylesheet" href="components/daily-report-mobile.css">
+    <link rel="stylesheet" href="global-mobile.css">
 
     <!-- ApexCharts -->
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
@@ -768,6 +770,13 @@
                             <select id="aiNewsSelect">
                                 <option value="">-- Select News Source --</option>
                             </select>
+                        </div>
+                        <div class="form-row">
+                            <label for="aiNewsPartySelect">Related Political Party (Optional)</label>
+                            <select id="aiNewsPartySelect">
+                                <option value="">-- Select Related Party --</option>
+                            </select>
+                            <small class="text-muted">Select if this article discusses a specific party</small>
                         </div>
                     </div>
 

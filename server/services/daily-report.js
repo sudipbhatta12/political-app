@@ -227,48 +227,89 @@ function calculateSentiments(posts) {
 }
 
 // ============================================
-// Source Summaries
+// Source Summaries (Aggregated by Political Party)
 // ============================================
 
 /**
- * Generate per-source breakdowns
+ * Generate per-party breakdowns
+ * Aggregates sentiment from all sources (news, candidates) by political party
  */
 async function generateSourceSummaries(mediaPosts, candidatePosts) {
-    const summaries = [];
+    const partyAggregates = {}; // key: party_id or party_name, value: { partyName, posts[] }
 
-    // Group media posts by source
-    const mediaBySource = {};
+    // 1. Process media posts - group by related_party_id
     for (const post of mediaPosts) {
-        const key = `${post.source_type}_${post.source_id}`;
-        if (!mediaBySource[key]) {
-            mediaBySource[key] = {
-                source_type: post.source_type,
-                source_id: post.source_id,
+        let partyKey, partyName;
+
+        if (post.related_party_id) {
+            // News article discusses a specific party
+            partyKey = `party_${post.related_party_id}`;
+            if (!partyAggregates[partyKey]) {
+                // Fetch party name
+                const { data } = await supabase.from('political_parties').select('name_en').eq('id', post.related_party_id).single();
+                partyName = data?.name_en || 'Unknown Party';
+                partyAggregates[partyKey] = {
+                    party_id: post.related_party_id,
+                    party_name: partyName,
+                    posts: []
+                };
+            }
+        } else if (post.source_type === 'political_party') {
+            // Post is directly from a party's page
+            partyKey = `party_${post.source_id}`;
+            if (!partyAggregates[partyKey]) {
+                const { data } = await supabase.from('political_parties').select('name_en').eq('id', post.source_id).single();
+                partyName = data?.name_en || 'Unknown Party';
+                partyAggregates[partyKey] = {
+                    party_id: post.source_id,
+                    party_name: partyName,
+                    posts: []
+                };
+            }
+        } else {
+            // No party association - skip or group as unassigned
+            partyKey = 'unassigned';
+            if (!partyAggregates[partyKey]) {
+                partyAggregates[partyKey] = {
+                    party_id: null,
+                    party_name: 'Unassigned',
+                    posts: []
+                };
+            }
+        }
+
+        partyAggregates[partyKey].posts.push(post);
+    }
+
+    // 2. Process candidate posts - group by candidate's party_name
+    for (const post of candidatePosts) {
+        const partyName = post.candidates?.party_name || 'Independent';
+        const partyKey = `name_${partyName}`;
+
+        if (!partyAggregates[partyKey]) {
+            partyAggregates[partyKey] = {
+                party_id: null,
+                party_name: partyName,
                 posts: []
             };
         }
-        mediaBySource[key].posts.push(post);
+        partyAggregates[partyKey].posts.push(post);
     }
 
-    // Process each source group
-    for (const key of Object.keys(mediaBySource)) {
-        const group = mediaBySource[key];
+    // 3. Calculate summaries for each party
+    const summaries = [];
+    for (const key of Object.keys(partyAggregates)) {
+        const group = partyAggregates[key];
+
+        // Skip unassigned if empty
+        if (key === 'unassigned' && group.posts.length === 0) continue;
+
         const sentiment = calculateSentiments(group.posts);
 
-        // Get source name
-        let sourceName = 'Unknown';
-        if (group.source_type === 'news_media') {
-            const { data } = await supabase.from('news_media').select('name_en').eq('id', group.source_id).single();
-            sourceName = data?.name_en || 'Unknown News Media';
-        } else if (group.source_type === 'political_party') {
-            const { data } = await supabase.from('political_parties').select('name_en').eq('id', group.source_id).single();
-            sourceName = data?.name_en || 'Unknown Party';
-        }
-
         summaries.push({
-            source_type: group.source_type,
-            source_id: group.source_id,
-            source_name: sourceName,
+            source_type: 'political_party',
+            source_id: group.party_id || 0,
+            source_name: group.party_name,
             post_count: group.posts.length,
             comment_count: sentiment.total_comments,
             engagement_count: sentiment.total_engagement,
@@ -280,32 +321,8 @@ async function generateSourceSummaries(mediaPosts, candidatePosts) {
         });
     }
 
-    // Group candidate posts by party
-    const candidatesByParty = {};
-    for (const post of candidatePosts) {
-        const partyName = post.candidates?.party_name || 'Independent';
-        if (!candidatesByParty[partyName]) {
-            candidatesByParty[partyName] = [];
-        }
-        candidatesByParty[partyName].push(post);
-    }
-
-    for (const partyName of Object.keys(candidatesByParty)) {
-        const partyPosts = candidatesByParty[partyName];
-        const sentiment = calculateSentiments(partyPosts);
-
-        summaries.push({
-            source_type: 'candidate',
-            source_id: 0,
-            source_name: `${partyName} Candidates`,
-            post_count: partyPosts.length,
-            comment_count: sentiment.total_comments,
-            engagement_count: 0,
-            avg_positive: sentiment.overall_positive,
-            avg_negative: sentiment.overall_negative,
-            avg_neutral: sentiment.overall_neutral
-        });
-    }
+    // Sort by post_count descending
+    summaries.sort((a, b) => b.post_count - a.post_count);
 
     return summaries;
 }

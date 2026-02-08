@@ -1,0 +1,259 @@
+/* ============================================
+   GLOBAL MOBILE RESPONSIVE BREAKPOINTS
+   Political Social Media Assessment App
+   ============================================ */
+
+/* Tablet and below */
+@media (max-width: 1024px) {
+    .container {
+        padding: 24px;
+    }
+
+    .party-grid {
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    }
+}
+
+/* Mobile devices */
+@media (max-width: 768px) {
+
+    /* Header - Stack vertically */
+    .header {
+        flex-direction: column;
+        height: auto;
+        padding: 12px 16px;
+        gap: 12px;
+    }
+
+    .header__brand {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .header__nav {
+        width: 100%;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+
+    .nav-item {
+        padding: 8px 12px;
+        font-size: 0.8rem;
+    }
+
+    .nav-item span {
+        display: none;
+        /* Hide text, show only icons on mobile */
+    }
+
+    .header__actions {
+        width: 100%;
+        justify-content: center;
+    }
+
+    /* Container */
+    .container {
+        padding: 16px;
+    }
+
+    /* Filters - Full width */
+    .filters {
+        padding: 16px;
+        border-radius: 12px;
+    }
+
+    .filters__dropdowns {
+        grid-template-columns: 1fr;
+    }
+
+    /* Party Grid - Single column */
+    .party-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .party-card {
+        padding: 16px;
+    }
+
+    .party-card__chart {
+        height: 180px;
+    }
+
+    /* Modal - Full screen on mobile */
+    .modal-overlay {
+        padding: 0 !important;
+    }
+
+    .modal-box {
+        width: 100% !important;
+        max-width: 100% !important;
+        height: 100vh !important;
+        max-height: 100vh !important;
+        border-radius: 0 !important;
+        margin: 0 !important;
+    }
+
+    .modal__body {
+        max-height: calc(100vh - 140px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .modal__header {
+        padding: 16px;
+    }
+
+    /* Summary Section */
+    .summary-section {
+        padding: 16px;
+    }
+
+    .summary-section__chart {
+        height: 280px;
+    }
+
+    /* Tables - Horizontal scroll */
+    .library__table,
+    table {
+        display: block;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        white-space: nowrap;
+    }
+
+    /* Typography adjustments */
+    h1 {
+        font-size: 1.75rem;
+    }
+
+    h2 {
+        font-size: 1.5rem;
+    }
+
+    h3 {
+        font-size: 1.125rem;
+    }
+
+    /* Buttons - Larger touch targets */
+    .btn {
+        padding: 12px 20px;
+        min-height: 44px;
+    }
+
+    .btn--icon {
+        width: 44px;
+        height: 44px;
+    }
+
+    /* Form inputs - prevent iOS zoom */
+    input,
+    select,
+    textarea {
+        font-size: 16px !important;
+    }
+}
+
+/* Small phones */
+@media (max-width: 480px) {
+    .header {
+        padding: 10px 12px;
+    }
+
+    .header__nav {
+        padding: 2px;
+    }
+
+    .nav-item {
+        padding: 6px 10px;
+    }
+
+    .party-card__candidate-name {
+        font-size: 1.1rem;
+    }
+
+    .party-card__meta-item {
+        font-size: 0.8rem;
+    }
+
+    /* Stack action buttons */
+    .party-card__actions {
+        flex-direction: column;
+    }
+
+    .party-card__actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    /* Segmented controls */
+    .segmented-control {
+        flex-wrap: wrap;
+    }
+
+    .segment-btn {
+        flex: 1 1 40%;
+        font-size: 0.75rem;
+    }
+}
+
+/* ============================================
+   ICON VISIBILITY FIXES
+   ============================================ */
+
+/* Ensure all icons are visible */
+.nav-item i,
+.nav-item svg,
+.btn__icon,
+.btn i,
+.btn svg,
+[data-lucide] {
+    color: currentColor !important;
+    stroke: currentColor !important;
+    opacity: 1 !important;
+}
+
+.btn--secondary i,
+.btn--secondary svg {
+    color: #f5f5f7 !important;
+}
+
+.btn--primary i,
+.btn--primary svg {
+    color: white !important;
+}
+
+/* Lucide Icon base styles */
+[data-lucide] {
+    width: 16px;
+    height: 16px;
+    stroke-width: 2;
+    vertical-align: middle;
+    display: inline-block;
+}
+
+.btn [data-lucide] {
+    margin-right: 6px;
+}
+
+/* Icon-only buttons */
+.btn-icon [data-lucide],
+.btn--icon [data-lucide] {
+    margin-right: 0;
+}
+
+/* Specific icon color overrides for dark backgrounds */
+.header i,
+.header svg,
+.header [data-lucide] {
+    color: rgba(255, 255, 255, 0.9) !important;
+    stroke: rgba(255, 255, 255, 0.9) !important;
+}
+
+.nav-item.active i,
+.nav-item.active svg,
+.nav-item.active [data-lucide] {
+    color: #0a84ff !important;
+    stroke: #0a84ff !important;
+}

@@ -1,0 +1,160 @@
+/* Mobile Optimization for Daily Report */
+
+@media (max-width: 768px) {
+
+    /* Container Adjustments */
+    .daily-report-container {
+        padding: 12px;
+    }
+
+    /* Header Stack */
+    .report-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+
+    .report-header h2 {
+        font-size: 20px;
+    }
+
+    .header-left {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .report-controls {
+        width: 100%;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .date-picker {
+        flex-grow: 1;
+        min-width: 140px;
+    }
+
+    .report-controls button {
+        flex-grow: 1;
+        justify-content: center;
+    }
+
+    /* Summary Stats Grid - Stack Vertically */
+    .report-summary {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .summary-card {
+        padding: 16px;
+    }
+
+    .stat-value {
+        font-size: 24px;
+    }
+
+    /* Charts Section - Stack Vertically */
+    .charts-section {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .chart-container {
+        padding: 16px;
+        min-height: 300px;
+    }
+
+    /* Analysis Section */
+    .analysis-section {
+        padding: 16px;
+    }
+
+    .analysis-header h3 {
+        font-size: 18px;
+    }
+
+    /* Source Table - Horizontal Scroll */
+    .source-breakdown {
+        padding: 16px;
+        overflow: hidden;
+        /* Prevent container overflow */
+    }
+
+    .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        /* Smooth scroll on iOS */
+        margin: 0 -16px;
+        /* Negative margin to full bleed */
+        padding: 0 16px;
+        /* Padding to align content */
+        width: calc(100% + 32px);
+    }
+
+    .source-table {
+        min-width: 600px;
+        /* Force minimum width to trigger scroll */
+    }
+
+    .source-table th,
+    .source-table td {
+        padding: 12px 10px;
+        font-size: 13px;
+    }
+
+    /* Tabs Navigation */
+    .source-tabs {
+        overflow-x: auto;
+        white-space: nowrap;
+        padding-bottom: 4px;
+        /* Space for scrollbar */
+        margin-bottom: 16px;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .source-tab {
+        padding: 8px 16px;
+        font-size: 13px;
+    }
+}
+
+/* Enhancements for very small screens (iPhone SE etc) */
+@media (max-width: 380px) {
+    .stat-label {
+        font-size: 12px;
+    }
+
+    .stat-value {
+        font-size: 20px;
+    }
+
+    .chart-container {
+        min-height: 250px;
+    }
+}
+
+/* Print/PDF Layout Fixes */
+@media print {
+    .daily-report-container {
+        padding: 0;
+        background: white;
+        color: black;
+    }
+
+    .report-header button,
+    .date-picker,
+    .source-tabs {
+        display: none !important;
+    }
+
+    .chart-container,
+    .analysis-section,
+    .summary-card {
+        background: white !important;
+        border: 1px solid #ddd !important;
+        color: black !important;
+        page-break-inside: avoid;
+    }
+}

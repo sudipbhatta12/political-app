@@ -39,24 +39,30 @@ class DailyReportComponent {
                 <div class="report-header">
                     <div class="header-left">
                         <button id="back-to-history-btn" class="btn btn-back" title="Back to Reports">
-                            ← Back
+                            <i data-lucide="arrow-left"></i> Back
                         </button>
-                        <h2 class="report-title">📊 Daily Political Analysis</h2>
+                        <h2 class="report-title"><i data-lucide="bar-chart-3"></i> Daily Political Analysis</h2>
                     </div>
                     <div class="report-controls">
                         <input type="date" id="report-date-picker" class="date-picker">
                         <button id="generate-report-btn" class="btn btn-primary">
-                            <span class="btn-icon">⚡</span> Generate Report
+                            <i data-lucide="zap"></i> Generate Report
                         </button>
                         <button id="refresh-report-btn" class="btn btn-secondary" style="margin-left: 8px;">
-                            <span class="btn-icon">🔄</span> Refresh
+                            <i data-lucide="refresh-cw"></i> Refresh
                         </button>
-                        <button id="download-pdf-btn" class="btn btn-secondary" style="margin-left: 8px; display: none;">
-                            <span class="btn-icon">📥</span> PDF
-                        </button>
+                        <div class="dropdown" style="display: none;" id="export-dropdown-container">
+                            <button id="export-btn" class="btn btn-secondary" style="margin-left: 8px;">
+                                <i data-lucide="download"></i> Export ▼
+                            </button>
+                            <div class="dropdown-content" id="export-dropdown-content">
+                                <a href="#" id="export-pdf-action"><i data-lucide="file-text"></i> Export as PDF</a>
+                                <a href="#" id="export-html-action"><i data-lucide="globe"></i> Export as Interactive HTML</a>
+                            </div>
+                        </div>
                         ${this.userRole !== 'viewer' ? `
                         <button id="delete-report-btn" class="btn btn-danger" style="display: none; margin-left: 8px;">
-                            <span class="btn-icon">🗑️</span> Delete
+                            <i data-lucide="trash-2"></i> Delete
                         </button>
                         ` : ''}
                     </div>
@@ -73,11 +79,11 @@ class DailyReportComponent {
 
                 <!-- No Data State -->
                 <div id="report-no-data" class="report-no-data" style="display: none;">
-                    <div class="no-data-icon">📭</div>
+                    <div class="no-data-icon"><i data-lucide="inbox" style="width: 48px; height: 48px;"></i></div>
                     <h3>No Report Available</h3>
                     <p id="no-data-message">No data found for this date.</p>
                     <button id="generate-from-nodata-btn" class="btn btn-primary" style="margin-top: 16px;">
-                        <span class="btn-icon">⚡</span> Generate Report Now
+                        <i data-lucide="zap"></i> Generate Report Now
                     </button>
                 </div>
 
@@ -124,20 +130,20 @@ class DailyReportComponent {
                             <canvas id="sentiment-pie-chart"></canvas>
                         </div>
                         <div class="chart-container">
-                            <h3>By Source</h3>
+                            <h3>By Political Party</h3>
                             <canvas id="source-bar-chart"></canvas>
                         </div>
                     </div>
 
                     <!-- AI Summary -->
                     <div class="ai-summary-section">
-                        <h3>📋 Analysis Summary <span id="summary-source-badge" class="badge"></span></h3>
+                        <h3><i data-lucide="clipboard-list"></i> Analysis Summary <span id="summary-source-badge" class="badge"></span></h3>
                         <div id="ai-summary" class="ai-summary"></div>
                     </div>
 
                     <!-- Source Table -->
                     <div class="source-breakdown">
-                        <h3>📰 Source Breakdown</h3>
+                        <h3><i data-lucide="newspaper"></i> Source Breakdown</h3>
                         <div class="source-tabs">
                             <button class="source-tab active" data-type="all">All</button>
                             <button class="source-tab" data-type="news_media">News</button>
@@ -205,8 +211,33 @@ class DailyReportComponent {
             this.generateReport(datePicker.value);
         });
 
-        document.getElementById('download-pdf-btn')?.addEventListener('click', () => {
+
+        // Export Dropdown
+        const exportBtn = document.getElementById('export-btn');
+        const dropdownContainer = document.getElementById('export-dropdown-container');
+
+        if (exportBtn) {
+            exportBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                dropdownContainer.classList.toggle('show');
+            });
+
+            // Close dropdown when clicking outside
+            window.addEventListener('click', () => {
+                if (dropdownContainer.classList.contains('show')) {
+                    dropdownContainer.classList.remove('show');
+                }
+            });
+        }
+
+        document.getElementById('export-pdf-action')?.addEventListener('click', (e) => {
+            e.preventDefault();
             this.exportPDF();
+        });
+
+        document.getElementById('export-html-action')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.exportHTML();
         });
 
         document.getElementById('delete-report-btn')?.addEventListener('click', () => {
@@ -262,7 +293,7 @@ class DailyReportComponent {
         document.getElementById('report-no-data').style.display = 'flex';
         document.getElementById('no-data-message').textContent = message;
         document.getElementById('report-content').style.display = 'none';
-        document.getElementById('download-pdf-btn').style.display = 'none';
+        document.getElementById('export-dropdown-container').style.display = 'none';
         document.getElementById('delete-report-btn')?.style.setProperty('display', 'none');
     }
 
@@ -270,7 +301,7 @@ class DailyReportComponent {
         document.getElementById('report-loading').style.display = 'none';
         document.getElementById('report-no-data').style.display = 'none';
         document.getElementById('report-content').style.display = 'block';
-        document.getElementById('download-pdf-btn').style.display = 'inline-flex';
+        document.getElementById('export-dropdown-container').style.display = 'inline-flex';
 
         if (this.userRole !== 'viewer') {
             document.getElementById('delete-report-btn')?.style.setProperty('display', 'inline-flex');
@@ -634,8 +665,8 @@ class DailyReportComponent {
             for (let i = 1; i <= pages; i++) {
                 doc.setPage(i);
                 doc.setFontSize(8);
-                doc.setTextColor(150);
-                doc.text(`Page ${i}/${pages} - Political Assessment Tool`, 105, 290, { align: 'center' });
+                doc.setTextColor(128, 128, 128);
+                doc.text(`Page ${i} of ${pages}`, 105, 290, { align: 'center' });
             }
 
             doc.save(`DailyReport_${report.report_date}.pdf`);
@@ -643,6 +674,140 @@ class DailyReportComponent {
             console.error('PDF error:', error);
             alert('Failed to generate PDF.');
         }
+    }
+
+    /**
+     * Export as Interactive HTML
+     */
+    exportHTML() {
+        if (!this.currentReport) {
+            alert('No report data to export. Please load a report first.');
+            return;
+        }
+
+        const report = this.currentReport;
+        const filename = `Daily_Report_${report.report_date}.html`;
+
+        // Mobile-optimized CSS
+        const css = `
+            :root { --primary: #10B981; --bg: #1a1a2e; --text: #f0f0f0; --surface: #252540; }
+            body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); padding: 20px; line-height: 1.6; max-width: 900px; margin: 0 auto; }
+            h1, h2, h3 { color: var(--text); }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 1px solid #333; padding-bottom: 20px; }
+            .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 30px; }
+            .stat-card { background: var(--surface); padding: 15px; border-radius: 8px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+            .value { font-size: 24px; font-weight: bold; }
+            .label { font-size: 12px; color: #888; text-transform: uppercase; }
+            .positive { color: #10B981; } .negative { color: #EF4444; } .neutral { color: #888; }
+            .section { background: var(--surface); padding: 20px; border-radius: 12px; margin-bottom: 20px; }
+            .ai-summary { background: rgba(16, 185, 129, 0.1); border-left: 4px solid var(--primary); padding: 15px; border-radius: 4px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { text-align: left; padding: 12px; border-bottom: 1px solid #333; }
+            th { color: #888; font-size: 12px; text-transform: uppercase; cursor: pointer; }
+            tr:hover td { background: rgba(255,255,255,0.05); }
+            @media (max-width: 600px) {
+                .stats-grid { grid-template-columns: 1fr; }
+                table { display: block; overflow-x: auto; }
+            }
+        `;
+
+        const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Report: ${report.report_date}</title>
+    <style>${css}</style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 Daily Political Analysis</h1>
+        <p>Date: ${report.report_date}</p>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card"><div class="value">${report.total_posts_analyzed || 0}</div><div class="label">Total Posts</div></div>
+        <div class="stat-card"><div class="value positive">${(report.overall_positive || 0).toFixed(1)}%</div><div class="label">Positive</div></div>
+        <div class="stat-card"><div class="value negative">${(report.overall_negative || 0).toFixed(1)}%</div><div class="label">Negative</div></div>
+        <div class="stat-card"><div class="value neutral">${(report.overall_neutral || 0).toFixed(1)}%</div><div class="label">Neutral</div></div>
+    </div>
+
+    <div class="section">
+        <h3>🤖 AI Executive Summary</h3>
+        <div class="ai-summary">
+            ${report.ai_summary ? report.ai_summary.replace(/\n/g, '<br>') : '<p>No analysis available.</p>'}
+        </div>
+    </div>
+
+    <div class="section">
+        <h3>📰 Source Breakdown</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th onclick="sortTable(0)">Source Name</th>
+                    <th onclick="sortTable(1)">Posts</th>
+                    <th onclick="sortTable(2)">Positive</th>
+                    <th onclick="sortTable(3)">Negative</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${(report.source_summaries || []).map(s => `
+                <tr>
+                    <td><strong>${s.source_name}</strong></td>
+                    <td>${s.post_count || s.total_posts || 0}</td>
+                    <td class="positive">${(s.avg_positive || 0).toFixed(1)}%</td>
+                    <td class="negative">${(s.avg_negative || 0).toFixed(1)}%</td>
+                </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        function sortTable(n) {
+            var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+            table = document.querySelector("table");
+            switching = true;
+            dir = "asc";
+            while (switching) {
+                switching = false;
+                rows = table.rows;
+                for (i = 1; i < (rows.length - 1); i++) {
+                    shouldSwitch = false;
+                    x = rows[i].getElementsByTagName("TD")[n];
+                    y = rows[i + 1].getElementsByTagName("TD")[n];
+                    let xVal = isNaN(parseFloat(x.innerHTML)) ? x.innerHTML.toLowerCase() : parseFloat(x.innerHTML);
+                    let yVal = isNaN(parseFloat(y.innerHTML)) ? y.innerHTML.toLowerCase() : parseFloat(y.innerHTML);
+                    
+                    if (dir == "asc") {
+                        if (xVal > yVal) { shouldSwitch = true; break; }
+                    } else if (dir == "desc") {
+                        if (xVal < yVal) { shouldSwitch = true; break; }
+                    }
+                }
+                if (shouldSwitch) {
+                    rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                    switching = true;
+                    switchcount ++;
+                } else {
+                    if (switchcount == 0 && dir == "asc") { dir = "desc"; switching = true; }
+                }
+            }
+        }
+    </script>
+</body>
+</html>`;
+
+        const blob = new Blob([htmlContent], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     }
 }
 

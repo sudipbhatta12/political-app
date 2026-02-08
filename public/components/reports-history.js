@@ -9,6 +9,7 @@ class ReportsHistoryComponent {
         this.container = document.getElementById(containerId);
         this.reports = [];
         this.todayGenerated = false;
+        this.userRole = localStorage.getItem('userRole') || 'viewer';
 
         if (!this.container) {
             console.error('❌ Reports History container not found:', containerId);
@@ -29,13 +30,13 @@ class ReportsHistoryComponent {
         this.container.innerHTML = `
             <div class="reports-history-container">
                 <div class="reports-header">
-                    <h2>📊 Daily Reports</h2>
+                    <h2><i data-lucide="bar-chart-3"></i> Daily Reports</h2>
                     <p class="subtitle">RSP Strategic Intelligence Briefings</p>
                 </div>
 
                 <div class="generate-section" id="generate-section">
                     <div class="generate-card">
-                        <div class="generate-icon">⚡</div>
+                        <div class="generate-icon"><i data-lucide="zap" style="width: 28px; height: 28px; color: #F59E0B;"></i></div>
                         <div class="generate-info">
                             <h3>Today's Report</h3>
                             <p id="today-status">Checking...</p>
@@ -50,7 +51,7 @@ class ReportsHistoryComponent {
                 </div>
 
                 <div class="history-section">
-                    <h3>📅 Report History</h3>
+                    <h3><i data-lucide="calendar"></i> Report History</h3>
                     <div id="reports-timeline" class="reports-timeline">
                         <div class="loading-spinner">Loading reports...</div>
                     </div>
@@ -125,16 +126,25 @@ class ReportsHistoryComponent {
             .report-item {
                 display: flex;
                 align-items: center;
-                padding: 16px 20px;
                 background: #1e1e2e;
                 border-radius: 10px;
                 border: 1px solid #333;
-                cursor: pointer;
                 transition: all 0.2s ease;
+                overflow: hidden;
             }
             .report-item:hover {
                 background: #252538;
                 border-color: #10B981;
+            }
+            .report-item-main {
+                display: flex;
+                align-items: center;
+                flex: 1;
+                padding: 16px 20px;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+            .report-item-main:hover {
                 transform: translateX(4px);
             }
             .report-date {
@@ -170,6 +180,41 @@ class ReportsHistoryComponent {
             .report-arrow {
                 color: #666;
                 font-size: 20px;
+            }
+            .report-actions {
+                display: flex;
+                gap: 8px;
+                padding: 0 16px;
+                border-left: 1px solid #333;
+            }
+            .action-btn {
+                width: 36px;
+                height: 36px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border: none;
+                border-radius: 8px;
+                background: rgba(255, 255, 255, 0.05);
+                color: #888;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+            .action-btn:hover {
+                background: rgba(255, 255, 255, 0.1);
+                color: #fff;
+            }
+            .action-btn.download-btn:hover {
+                background: rgba(16, 185, 129, 0.2);
+                color: #10B981;
+            }
+            .action-btn.delete-btn:hover {
+                background: rgba(239, 68, 68, 0.2);
+                color: #EF4444;
+            }
+            .action-btn i, .action-btn svg {
+                width: 16px;
+                height: 16px;
             }
             .no-reports {
                 text-align: center;
@@ -210,7 +255,7 @@ class ReportsHistoryComponent {
             console.error('Load history error:', error);
             document.getElementById('reports-timeline').innerHTML = `
                 <div class="no-reports">
-                    <p>❌ Failed to load reports. Please try again.</p>
+                    <p><i data-lucide="alert-circle" style="color: #EF4444;"></i> Failed to load reports. Please try again.</p>
                 </div>
             `;
         }
@@ -245,7 +290,8 @@ class ReportsHistoryComponent {
         if (!this.reports || this.reports.length === 0) {
             container.innerHTML = `
                 <div class="no-reports">
-                    <p>📭 No reports generated yet.</p>
+                    <p><i data-lucide="inbox" style="width: 32px; height: 32px;"></i></p>
+                    <p>No reports generated yet.</p>
                     <p style="font-size: 14px; margin-top: 8px;">Click "Generate Report" above to create your first daily briefing.</p>
                 </div>
             `;
@@ -256,35 +302,51 @@ class ReportsHistoryComponent {
             const date = new Date(report.report_date);
             const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
             const fullDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            const isAdmin = this.userRole === 'admin';
 
             return `
-                <div class="report-item" onclick="reportsHistory.viewReport('${report.report_date}')">
-                    <div class="report-date">
-                        <div class="day">${dayName}</div>
-                        <div class="full">${fullDate}</div>
+                <div class="report-item" data-date="${report.report_date}">
+                    <div class="report-item-main" onclick="reportsHistory.viewReport('${report.report_date}')">
+                        <div class="report-date">
+                            <div class="day">${dayName}</div>
+                            <div class="full">${fullDate}</div>
+                        </div>
+                        <div class="report-stats">
+                            <div class="report-stat">
+                                <div class="value">${report.total_posts_analyzed || 0}</div>
+                                <div class="label">Posts</div>
+                            </div>
+                            <div class="report-stat">
+                                <div class="value">${(report.total_comments_analyzed || 0).toLocaleString()}</div>
+                                <div class="label">Comments</div>
+                            </div>
+                            <div class="report-stat positive">
+                                <div class="value">${(report.overall_positive || 0).toFixed(0)}%</div>
+                                <div class="label">Positive</div>
+                            </div>
+                            <div class="report-stat negative">
+                                <div class="value">${(report.overall_negative || 0).toFixed(0)}%</div>
+                                <div class="label">Negative</div>
+                            </div>
+                        </div>
+                        <div class="report-arrow"><i data-lucide="chevron-right"></i></div>
                     </div>
-                    <div class="report-stats">
-                        <div class="report-stat">
-                            <div class="value">${report.total_posts_analyzed || 0}</div>
-                            <div class="label">Posts</div>
-                        </div>
-                        <div class="report-stat">
-                            <div class="value">${(report.total_comments_analyzed || 0).toLocaleString()}</div>
-                            <div class="label">Comments</div>
-                        </div>
-                        <div class="report-stat positive">
-                            <div class="value">${(report.overall_positive || 0).toFixed(0)}%</div>
-                            <div class="label">Positive</div>
-                        </div>
-                        <div class="report-stat negative">
-                            <div class="value">${(report.overall_negative || 0).toFixed(0)}%</div>
-                            <div class="label">Negative</div>
-                        </div>
+                    <div class="report-actions">
+                        <button class="action-btn download-btn" onclick="event.stopPropagation(); reportsHistory.downloadReport('${report.report_date}')" title="Download Report">
+                            <i data-lucide="download"></i>
+                        </button>
+                        ${isAdmin ? `
+                        <button class="action-btn delete-btn" onclick="event.stopPropagation(); reportsHistory.deleteReport(${report.id}, '${report.report_date}')" title="Delete Report">
+                            <i data-lucide="trash-2"></i>
+                        </button>
+                        ` : ''}
                     </div>
-                    <div class="report-arrow">→</div>
                 </div>
             `;
         }).join('');
+
+        // Initialize Lucide icons
+        if (window.lucide) window.lucide.createIcons();
     }
 
     async generateTodayReport() {
@@ -310,7 +372,7 @@ class ReportsHistoryComponent {
             const result = await response.json();
 
             if (result.success) {
-                statusEl.textContent = '✅ Report generated!';
+                statusEl.textContent = 'Report generated!';
                 statusEl.style.color = '#10B981';
                 await this.loadHistory();
                 // Navigate to the report
@@ -342,7 +404,48 @@ class ReportsHistoryComponent {
             window.dispatchEvent(new CustomEvent('viewReportDetail', { detail: { date } }));
         }
     }
+
+    async downloadReport(date) {
+        try {
+            // Navigate to report detail which has the export function
+            sessionStorage.setItem('selectedReportDate', date);
+            sessionStorage.setItem('autoDownload', 'true');
+
+            if (window.showReportDetail) {
+                window.showReportDetail(date);
+            }
+        } catch (error) {
+            console.error('Download error:', error);
+            alert('Failed to download report.');
+        }
+    }
+
+    async deleteReport(id, date) {
+        if (!confirm(`Are you sure you want to delete the report for ${date}?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/reports/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+            });
+
+            if (response.ok) {
+                // Remove from local list and re-render
+                this.reports = this.reports.filter(r => r.id !== id);
+                this.renderTimeline();
+                this.updateTodayStatus();
+            } else {
+                const result = await response.json();
+                alert(result.message || 'Failed to delete report.');
+            }
+        } catch (error) {
+            console.error('Delete error:', error);
+            alert('Error connecting to server.');
+        }
+    }
 }
 
 // Initialize
-let reportsHistory;
+

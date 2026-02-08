@@ -94,7 +94,7 @@
 
 <body>
     <header class="app-header">
-        <div class="app-logo">📊 Political Analysis</div>
+        <div class="app-logo"><i data-lucide="bar-chart-3"></i> Political Analysis</div>
         <nav class="app-nav">
             <a href="/app" class="nav-link">Dashboard</a>
             <a href="/reports.html" class="nav-link">Daily Reports</a>
@@ -109,8 +109,15 @@
         <div id="source-manager-container"></div>
     </main>
 
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
     <!-- Components -->
     <script src="/components/source-manager.js"></script>
+    <script>
+        // Initialize Lucide icons after page load
+        if (window.lucide) window.lucide.createIcons();
+    </script>
 
     <script>
         // Check authentication

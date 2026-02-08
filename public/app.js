@@ -206,6 +206,7 @@ const elements = {
     aiPartySection: document.getElementById('aiPartySection'),
     aiNewsSelect: document.getElementById('aiNewsSelect'),
     aiPartySelect: document.getElementById('aiPartySelect'),
+    aiNewsPartySelect: document.getElementById('aiNewsPartySelect'),
 
     // Timeline
     timelineSection: document.getElementById('timelineSection'),
@@ -2823,11 +2824,13 @@ async function populatePartySelectorInAI() {
     try {
         const parties = await API.get('/parties');
         elements.aiPartySelect.innerHTML = '<option value="">-- Select Political Party --</option>';
+        elements.aiNewsPartySelect.innerHTML = '<option value="">-- Select Related Party --</option>';
         parties.forEach(p => {
             const opt = document.createElement('option');
             opt.value = p.id;
             opt.textContent = p.name_en || p.name_np || p.abbreviation;
             elements.aiPartySelect.appendChild(opt);
+            elements.aiNewsPartySelect.appendChild(opt.cloneNode(true));
         });
     } catch (e) { console.error('Failed to load parties', e); }
 }
@@ -2918,6 +2921,12 @@ async function handleAISubmit(e) {
         if (!newsId) { showToast('Please select a news source', 'error'); elements.aiLoading.style.display = 'none'; elements.aiSubmitBtn.disabled = false; return; }
         formData.append('news_media_id', newsId);
         formData.append('source_type', 'news_media');
+
+        // Add related party if selected
+        const relatedPartyId = elements.aiNewsPartySelect.value;
+        if (relatedPartyId) {
+            formData.append('related_party_id', relatedPartyId);
+        }
     } else if (sourceType === 'party') {
         const partyId = elements.aiPartySelect.value;
         if (!partyId) { showToast('Please select a political party', 'error'); elements.aiLoading.style.display = 'none'; elements.aiSubmitBtn.disabled = false; return; }
@@ -3697,12 +3706,12 @@ function showReportsHistory() {
     document.getElementById('dailyReportsBtn')?.classList.add('active');
 
     // Initialize history component if first time
-    if (!reportsHistoryComponent && historyContainer) {
+    if (!window.reportsHistory && historyContainer) {
         console.log('Initializing ReportsHistoryComponent...');
-        reportsHistoryComponent = new ReportsHistoryComponent('reports-history-root');
-    } else if (reportsHistoryComponent) {
+        window.reportsHistory = new ReportsHistoryComponent('reports-history-root');
+    } else if (window.reportsHistory) {
         // Refresh history when returning
-        reportsHistoryComponent.loadHistory();
+        window.reportsHistory.loadHistory();
     }
 }
 

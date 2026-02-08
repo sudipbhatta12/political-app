@@ -346,7 +346,8 @@ async function analyzeComments(req, res) {
             postId = await newsMediaLib.createNewsMediaPost(parseInt(sourceId), {
                 ...postData,
                 title: 'AI Analysis',
-                comments_summary: postData.comments_summary || postData.conclusion
+                comments_summary: postData.comments_summary || postData.conclusion,
+                related_party_id: req.body.related_party_id ? parseInt(req.body.related_party_id) : null
             });
 
         } else if (sourceType === 'political_party') {

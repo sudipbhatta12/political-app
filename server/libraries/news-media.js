@@ -137,7 +137,8 @@ module.exports = {
             negative_percentage: postData.negative_percentage,
             neutral_percentage: postData.neutral_percentage,
             comment_count: postData.comment_count || 0,
-            content: postData.comments_summary || postData.remarks || postData.content || ''
+            content: postData.comments_summary || postData.remarks || postData.content || '',
+            related_party_id: postData.related_party_id || null
         }).select('id').single();
         if (error) throw new Error(error.message);
         return data.id;

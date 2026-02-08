@@ -19,15 +19,15 @@ class SourceManagerComponent {
         this.container.innerHTML = `
             <div class="source-manager-container">
                 <div class="manager-header">
-                    <h2>📚 Source Library Manager</h2>
+                    <h2><i data-lucide="library"></i> Source Library Manager</h2>
                     <button id="add-source-btn" class="btn btn-primary">
                         <span>+</span> Add New Source
                     </button>
                 </div>
 
                 <div class="manager-tabs">
-                    <button class="manager-tab active" data-tab="news-media">📰 News Media</button>
-                    <button class="manager-tab" data-tab="parties">🏛️ Political Parties</button>
+                    <button class="manager-tab active" data-tab="news-media"><i data-lucide="newspaper"></i> News Media</button>
+                    <button class="manager-tab" data-tab="parties"><i data-lucide="landmark"></i> Political Parties</button>
                 </div>
 
                 <div class="source-grid" id="source-grid">
