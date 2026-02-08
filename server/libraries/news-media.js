@@ -128,13 +128,6 @@ module.exports = {
      * Create news media post
      */
     createNewsMediaPost: async (newsMediaId, postData) => {
-
-
-
-        // If I assume the schema from `supabase_schema_extension.sql` is the source of truth for `media_posts`.
-
-        // I will sanitize to match THAT schema.
-
         const { data, error } = await supabase.from('media_posts').insert({
             source_type: 'news_media',
             source_id: newsMediaId,
@@ -143,7 +136,8 @@ module.exports = {
             positive_percentage: postData.positive_percentage,
             negative_percentage: postData.negative_percentage,
             neutral_percentage: postData.neutral_percentage,
-            content: postData.remarks || postData.content || ''
+            comment_count: postData.comment_count || 0,
+            content: postData.comments_summary || postData.remarks || postData.content || ''
         }).select('id').single();
         if (error) throw new Error(error.message);
         return data.id;
@@ -162,6 +156,15 @@ module.exports = {
 
         const { data: posts } = await query;
         return module.exports.calculateSentiment(posts || []);
+    },
+
+    /**
+     * Delete media post by ID
+     */
+    deleteMediaPost: async (postId) => {
+        const { error } = await supabase.from('media_posts').delete().eq('id', postId);
+        if (error) throw new Error(error.message);
+        return true;
     },
 
     /**

@@ -136,8 +136,8 @@ module.exports = {
             positive_percentage: postData.positive_percentage,
             negative_percentage: postData.negative_percentage,
             neutral_percentage: postData.neutral_percentage,
-            neutral_percentage: postData.neutral_percentage,
-            content: postData.remarks || postData.content || ''
+            comment_count: postData.comment_count || 0,
+            content: postData.comments_summary || postData.remarks || postData.content || ''
         }).select('id').single();
         if (error) throw new Error(error.message);
         return data.id;
@@ -165,6 +165,15 @@ module.exports = {
         const { data, error } = await supabase.from('candidates').select('*').ilike('party_name', `%${partyName}%`);
         if (error) console.error('getPartyCandidates error:', error.message);
         return data || [];
+    },
+
+    /**
+     * Delete media post by ID
+     */
+    deleteMediaPost: async (postId) => {
+        const { error } = await supabase.from('media_posts').delete().eq('id', postId);
+        if (error) throw new Error(error.message);
+        return true;
     },
 
     /**

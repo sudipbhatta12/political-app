@@ -3276,6 +3276,231 @@ async function loadPartiesLibrary() {
     }
 }
 
+// ============================================
+// Source Detail Modal Functions
+// ============================================
+
+/**
+ * View News Media Details
+ */
+async function viewNewsDetails(newsMediaId) {
+    const modal = document.getElementById('sourceDetailModal');
+    const loading = document.getElementById('sourceDetailLoading');
+    const content = document.getElementById('sourceDetailContent');
+    const nameEl = document.getElementById('sourceDetailName');
+    const postsContainer = document.getElementById('sourceDetailPosts');
+    const emptyState = document.getElementById('sourceDetailEmpty');
+
+    // Show modal with loading state
+    modal.classList.add('active');
+    loading.style.display = 'block';
+    content.style.display = 'none';
+
+    try {
+        // Fetch news media details
+        const response = await fetch(`/api/news-media/${newsMediaId}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+        });
+        if (!response.ok) throw new Error('Failed to fetch news media');
+        const newsMedia = await response.json();
+
+        // Fetch posts for this news source
+        const postsResponse = await fetch(`/api/news-media/${newsMediaId}/posts`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+        });
+        const posts = postsResponse.ok ? await postsResponse.json() : [];
+
+        // Calculate sentiment averages
+        const sentiment = calculateSourceSentiment(posts);
+
+        // Update UI
+        nameEl.textContent = newsMedia.name_en || newsMedia.name_np || 'News Media';
+        document.getElementById('detailPostCount').textContent = posts.length;
+        document.getElementById('detailPositive').textContent = sentiment.avg_positive.toFixed(1) + '%';
+        document.getElementById('detailNegative').textContent = sentiment.avg_negative.toFixed(1) + '%';
+        document.getElementById('detailNeutral').textContent = sentiment.avg_neutral.toFixed(1) + '%';
+
+        // Render posts list with comments summary
+        if (posts.length > 0) {
+            // Calculate total comments
+            const totalComments = posts.reduce((sum, p) => sum + (p.comment_count || 0), 0);
+            document.getElementById('detailPostCount').textContent = `${posts.length} (${totalComments.toLocaleString()} comments)`;
+
+            postsContainer.innerHTML = posts.map(post => {
+                // Summary paragraph from content field
+                const summaryHtml = post.content ? `
+                    <div style="margin-top: 12px; padding: 12px; background: rgba(59, 130, 246, 0.1); border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.2);">
+                        <h5 style="margin: 0 0 8px 0; font-size: 0.85rem; color: #60A5FA; display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="file-text" style="width: 14px; height: 14px;"></i>
+                            Analysis Summary
+                        </h5>
+                        <p style="margin: 0; font-size: 0.85rem; color: rgba(255,255,255,0.85); line-height: 1.5;">${escapeHtml(post.content)}</p>
+                    </div>
+                ` : '';
+
+                return `
+                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 12px; margin-bottom: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <span style="color: #a0a0b0; font-size: 0.8rem;">
+                                ${post.published_date ? new Date(post.published_date).toLocaleDateString() : 'No date'}
+                            </span>
+                            ${post.comment_count ? `<span style="color: #8B5CF6; font-size: 0.75rem;"><i data-lucide="message-square" style="width: 12px; height: 12px;"></i> ${post.comment_count.toLocaleString()} comments</span>` : ''}
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <span style="color: #10B981; font-size: 0.8rem;">${(post.positive_percentage || 0).toFixed(1)}%</span>
+                            <span style="color: #EF4444; font-size: 0.8rem;">${(post.negative_percentage || 0).toFixed(1)}%</span>
+                            <span style="color: #9CA3AF; font-size: 0.8rem;">${(post.neutral_percentage || 0).toFixed(1)}%</span>
+                        </div>
+                    </div>
+                    ${post.post_url ? `<a href="${escapeHtml(post.post_url)}" target="_blank" style="color: #3B82F6; font-size: 0.85rem; word-break: break-all;">View Post →</a>` : ''}
+                    ${summaryHtml}
+                </div>
+            `}).join('');
+            emptyState.style.display = 'none';
+        } else {
+            postsContainer.innerHTML = '';
+            emptyState.style.display = 'block';
+        }
+
+        loading.style.display = 'none';
+        content.style.display = 'block';
+        lucide?.createIcons();
+
+    } catch (error) {
+        console.error('Error viewing news details:', error);
+        showToast('Failed to load news media details', 'error');
+        modal.classList.remove('active');
+    }
+}
+
+/**
+ * View Political Party Details
+ */
+async function viewPartyDetails(partyId) {
+    const modal = document.getElementById('sourceDetailModal');
+    const loading = document.getElementById('sourceDetailLoading');
+    const content = document.getElementById('sourceDetailContent');
+    const nameEl = document.getElementById('sourceDetailName');
+    const postsContainer = document.getElementById('sourceDetailPosts');
+    const emptyState = document.getElementById('sourceDetailEmpty');
+
+    // Show modal with loading state
+    modal.classList.add('active');
+    loading.style.display = 'block';
+    content.style.display = 'none';
+
+    try {
+        // Fetch party details
+        const response = await fetch(`/api/parties/${partyId}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+        });
+        if (!response.ok) throw new Error('Failed to fetch party');
+        const party = await response.json();
+
+        // Fetch posts for this party
+        const postsResponse = await fetch(`/api/parties/${partyId}/posts`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+        });
+        const posts = postsResponse.ok ? await postsResponse.json() : [];
+
+        // Calculate sentiment averages
+        const sentiment = calculateSourceSentiment(posts);
+
+        // Update UI
+        nameEl.textContent = party.name_en || party.name_np || party.abbreviation || 'Political Party';
+        document.getElementById('detailPostCount').textContent = posts.length;
+        document.getElementById('detailPositive').textContent = sentiment.avg_positive.toFixed(1) + '%';
+        document.getElementById('detailNegative').textContent = sentiment.avg_negative.toFixed(1) + '%';
+        document.getElementById('detailNeutral').textContent = sentiment.avg_neutral.toFixed(1) + '%';
+
+        // Render posts list with comments summary
+        if (posts.length > 0) {
+            // Calculate total comments
+            const totalComments = posts.reduce((sum, p) => sum + (p.comment_count || 0), 0);
+            document.getElementById('detailPostCount').textContent = `${posts.length} (${totalComments.toLocaleString()} comments)`;
+
+            postsContainer.innerHTML = posts.map(post => {
+                // Summary paragraph from content field
+                const summaryHtml = post.content ? `
+                    <div style="margin-top: 12px; padding: 12px; background: rgba(59, 130, 246, 0.1); border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.2);">
+                        <h5 style="margin: 0 0 8px 0; font-size: 0.85rem; color: #60A5FA; display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="file-text" style="width: 14px; height: 14px;"></i>
+                            Analysis Summary
+                        </h5>
+                        <p style="margin: 0; font-size: 0.85rem; color: rgba(255,255,255,0.85); line-height: 1.5;">${escapeHtml(post.content)}</p>
+                    </div>
+                ` : '';
+
+                return `
+                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 12px; margin-bottom: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <span style="color: #a0a0b0; font-size: 0.8rem;">
+                                ${post.published_date ? new Date(post.published_date).toLocaleDateString() : 'No date'}
+                            </span>
+                            ${post.comment_count ? `<span style="color: #8B5CF6; font-size: 0.75rem;"><i data-lucide="message-square" style="width: 12px; height: 12px;"></i> ${post.comment_count.toLocaleString()} comments</span>` : ''}
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <span style="color: #10B981; font-size: 0.8rem;">${(post.positive_percentage || 0).toFixed(1)}%</span>
+                            <span style="color: #EF4444; font-size: 0.8rem;">${(post.negative_percentage || 0).toFixed(1)}%</span>
+                            <span style="color: #9CA3AF; font-size: 0.8rem;">${(post.neutral_percentage || 0).toFixed(1)}%</span>
+                        </div>
+                    </div>
+                    ${post.post_url ? `<a href="${escapeHtml(post.post_url)}" target="_blank" style="color: #3B82F6; font-size: 0.85rem; word-break: break-all;">View Post →</a>` : ''}
+                    ${summaryHtml}
+                </div>
+            `}).join('');
+            emptyState.style.display = 'none';
+        } else {
+            postsContainer.innerHTML = '';
+            emptyState.style.display = 'block';
+        }
+
+        loading.style.display = 'none';
+        content.style.display = 'block';
+        lucide?.createIcons();
+
+    } catch (error) {
+        console.error('Error viewing party details:', error);
+        showToast('Failed to load party details', 'error');
+        modal.classList.remove('active');
+    }
+}
+
+/**
+ * Calculate average sentiment from posts array
+ */
+function calculateSourceSentiment(posts) {
+    if (!posts || posts.length === 0) {
+        return { avg_positive: 0, avg_negative: 0, avg_neutral: 0 };
+    }
+    const sum = posts.reduce((acc, p) => ({
+        positive: acc.positive + (p.positive_percentage || 0),
+        negative: acc.negative + (p.negative_percentage || 0),
+        neutral: acc.neutral + (p.neutral_percentage || 0)
+    }), { positive: 0, negative: 0, neutral: 0 });
+
+    return {
+        avg_positive: sum.positive / posts.length,
+        avg_negative: sum.negative / posts.length,
+        avg_neutral: sum.neutral / posts.length
+    };
+}
+
+/**
+ * Close source detail modal
+ */
+function closeSourceDetailModal() {
+    document.getElementById('sourceDetailModal').classList.remove('active');
+}
+
+// Initialize source detail modal close button
+document.getElementById('sourceDetailModalClose')?.addEventListener('click', closeSourceDetailModal);
+document.getElementById('sourceDetailModal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'sourceDetailModal') closeSourceDetailModal();
+});
+
 function closeAddSourceModal() {
     elements.addSourceModal.classList.remove('active');
 }

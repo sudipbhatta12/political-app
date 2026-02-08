@@ -223,6 +223,8 @@ async function analyzeComments(req, res) {
                - Summarize why people are Positive/Negative generally.
                - **RSP Specific Remarks**: Specific reasons for love/hate towards RSP (e.g., "Praised for quick action", "Criticized for stunt").
 
+            4. **Comments Summary**: Write a brief paragraph (2-4 sentences) that summarizes the overall themes, topics, and public sentiment found in the comments. This should be a human-readable summary suitable for display in a report.
+
             Return ONLY raw JSON (no markdown formatting) with this exact structure:
             {
                 "positive_percentage": number,
@@ -235,6 +237,7 @@ async function analyzeComments(req, res) {
                 "negative_remarks": "general negative summary",
                 "neutral_remarks": "general neutral summary",
                 "rsp_remarks": "Specific summary of sentiment towards RSP",
+                "comments_summary": "A brief 2-4 sentence paragraph summarizing the key themes and overall sentiment from the analyzed comments.",
                 "conclusion": "Final verification of public perception, highlighting RSP's standing."
             }
 
@@ -315,21 +318,55 @@ async function analyzeComments(req, res) {
             postId = await db.createPost(postData);
 
         } else if (sourceType === 'news_media') {
-            // Logic for News Media
-            // Note: Duplicate check logic can be added here similar to candidate if needed
-            // For now, simpler implementation
+            // Check for duplicate URL for News Media
+            if (req.body.source_url) {
+                const existingPosts = await newsMediaLib.getPostsByNewsMedia(parseInt(sourceId));
+                const duplicatePost = existingPosts.find(p => p.post_url === req.body.source_url);
+                if (duplicatePost && !req.body.force_reanalyze) {
+                    return res.status(409).json({
+                        error: 'duplicate_url',
+                        message: 'This post URL has already been analyzed for this news source.',
+                        existingPostId: duplicatePost.id,
+                        existingDate: duplicatePost.published_date,
+                        askConfirmation: true
+                    });
+                }
+                if (duplicatePost && req.body.force_reanalyze) {
+                    // Delete existing post before creating new one
+                    await newsMediaLib.deleteMediaPost(duplicatePost.id);
+                }
+            }
+
             postId = await newsMediaLib.createNewsMediaPost(parseInt(sourceId), {
                 ...postData,
                 title: 'AI Analysis',
-                content_summary: postData.conclusion // Map conclusion to summary
+                comments_summary: postData.comments_summary || postData.conclusion
             });
 
         } else if (sourceType === 'political_party') {
-            // Logic for Political Party
+            // Check for duplicate URL for Political Party
+            if (req.body.source_url) {
+                const existingPosts = await partiesLib.getPostsByParty(parseInt(sourceId));
+                const duplicatePost = existingPosts.find(p => p.post_url === req.body.source_url);
+                if (duplicatePost && !req.body.force_reanalyze) {
+                    return res.status(409).json({
+                        error: 'duplicate_url',
+                        message: 'This post URL has already been analyzed for this political party.',
+                        existingPostId: duplicatePost.id,
+                        existingDate: duplicatePost.published_date,
+                        askConfirmation: true
+                    });
+                }
+                if (duplicatePost && req.body.force_reanalyze) {
+                    // Delete existing post before creating new one
+                    await partiesLib.deleteMediaPost(duplicatePost.id);
+                }
+            }
+
             postId = await partiesLib.createPartyPost(parseInt(sourceId), {
                 ...postData,
                 title: 'AI Analysis',
-                content_summary: postData.conclusion
+                comments_summary: postData.comments_summary || postData.conclusion
             });
         }
 

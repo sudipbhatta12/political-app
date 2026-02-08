@@ -864,6 +864,72 @@
 
     </div>
 
+    <!-- Source Detail Modal (for News Media / Political Parties) -->
+    <div class="modal-overlay" id="sourceDetailModal">
+        <div class="modal-box" style="max-width: 800px;">
+            <div class="modal__header">
+                <h3 class="modal__title" id="sourceDetailTitle">
+                    <i data-lucide="info" style="color: #3B82F6;"></i>
+                    <span id="sourceDetailName">Source Details</span>
+                </h3>
+                <button class="modal__close" id="sourceDetailModalClose">&times;</button>
+            </div>
+            <div class="modal__body">
+                <!-- Loading State -->
+                <div id="sourceDetailLoading" style="display: none; text-align: center; padding: 40px;">
+                    <div class="loading-spinner"></div>
+                    <p style="color: #a0a0b0; margin-top: 16px;">Loading details...</p>
+                </div>
+
+                <!-- Content -->
+                <div id="sourceDetailContent">
+                    <!-- Summary Stats -->
+                    <div class="source-detail-stats"
+                        style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;">
+                        <div
+                            style="background: rgba(16, 185, 129, 0.1); padding: 16px; border-radius: 12px; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: 700; color: #10B981;" id="detailPostCount">0
+                            </div>
+                            <div style="font-size: 0.8rem; color: #a0a0b0;">Total Posts</div>
+                        </div>
+                        <div
+                            style="background: rgba(16, 185, 129, 0.1); padding: 16px; border-radius: 12px; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: 700; color: #10B981;" id="detailPositive">0%
+                            </div>
+                            <div style="font-size: 0.8rem; color: #a0a0b0;">Positive</div>
+                        </div>
+                        <div
+                            style="background: rgba(239, 68, 68, 0.1); padding: 16px; border-radius: 12px; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: 700; color: #EF4444;" id="detailNegative">0%
+                            </div>
+                            <div style="font-size: 0.8rem; color: #a0a0b0;">Negative</div>
+                        </div>
+                        <div
+                            style="background: rgba(156, 163, 175, 0.1); padding: 16px; border-radius: 12px; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: 700; color: #9CA3AF;" id="detailNeutral">0%
+                            </div>
+                            <div style="font-size: 0.8rem; color: #a0a0b0;">Neutral</div>
+                        </div>
+                    </div>
+
+                    <!-- Posts List -->
+                    <h4 style="color: white; margin-bottom: 16px; font-size: 1rem;">
+                        <i data-lucide="file-text" style="width: 16px; height: 16px; margin-right: 8px;"></i>
+                        Recent Posts
+                    </h4>
+                    <div id="sourceDetailPosts" style="max-height: 300px; overflow-y: auto;">
+                        <!-- Posts will be inserted here -->
+                    </div>
+                    <div id="sourceDetailEmpty" style="display: none; text-align: center; padding: 40px; color: #666;">
+                        <i data-lucide="inbox"
+                            style="width: 48px; height: 48px; opacity: 0.4; margin-bottom: 12px;"></i>
+                        <p>No posts found for this source</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
 
