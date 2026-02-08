@@ -37,7 +37,12 @@ class DailyReportComponent {
             <div class="daily-report-container">
                 <!-- Header -->
                 <div class="report-header">
-                    <h2 class="report-title">📊 Daily Political Analysis</h2>
+                    <div class="header-left">
+                        <button id="back-to-history-btn" class="btn btn-back" title="Back to Reports">
+                            ← Back
+                        </button>
+                        <h2 class="report-title">📊 Daily Political Analysis</h2>
+                    </div>
                     <div class="report-controls">
                         <input type="date" id="report-date-picker" class="date-picker">
                         <button id="generate-report-btn" class="btn btn-primary">
@@ -165,10 +170,28 @@ class DailyReportComponent {
 
     setupEventListeners() {
         const datePicker = document.getElementById('report-date-picker');
+
+        // Check if coming from history page with selected date
+        const selectedDate = sessionStorage.getItem('selectedReportDate');
         const today = new Date().toISOString().split('T')[0];
-        datePicker.value = today;
+        datePicker.value = selectedDate || today;
         datePicker.max = today;
+
+        // Clear session storage after reading
+        if (selectedDate) {
+            sessionStorage.removeItem('selectedReportDate');
+        }
+
         datePicker.addEventListener('change', (e) => this.loadReport(e.target.value));
+
+        // Back button handler
+        document.getElementById('back-to-history-btn')?.addEventListener('click', () => {
+            if (window.showReportsHistory) {
+                window.showReportsHistory();
+            } else {
+                window.dispatchEvent(new CustomEvent('showReportsHistory'));
+            }
+        });
 
         document.getElementById('generate-report-btn')?.addEventListener('click', () => {
             this.generateReport(datePicker.value);

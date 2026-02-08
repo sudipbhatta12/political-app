@@ -241,7 +241,8 @@
 
         <!-- Daily Reports View -->
         <div id="reports-view" style="display: none;">
-            <div id="daily-report-root"></div>
+            <div id="reports-history-root"></div>
+            <div id="daily-report-root" style="display: none;"></div>
         </div>
 
         <!-- Library View -->
@@ -690,12 +691,6 @@
 
     </div>
 
-    <!-- /#dashboard-view -->
-
-    <!-- Daily Reports View -->
-    <div id="reports-view" style="display: none;">
-        <div id="daily-report-root"></div>
-    </div>
 
     </div><!-- /.container -->
 
@@ -946,6 +941,7 @@
     <script src="background.js"></script>
 
     <!-- Components -->
+    <script src="components/reports-history.js"></script>
     <script src="components/daily-report.js"></script>
 
     <!-- App Script -->

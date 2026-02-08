@@ -3657,8 +3657,8 @@ async function handlePartyPostSubmit(e) {
 
 // ============================================
 // Daily Reports Module
-// ============================================
 let dailyReportComponent = null;
+let reportsHistoryComponent = null;
 
 function initDailyReports() {
     const btn = document.getElementById('dailyReportsBtn');
@@ -3666,33 +3666,76 @@ function initDailyReports() {
     if (!btn) return;
 
     btn.addEventListener('click', () => {
-        showReportsView();
+        showReportsHistory();
     });
+
+    // Set up global navigation functions that components can call
+    window.showReportsHistory = showReportsHistory;
+    window.showReportDetail = showReportDetail;
+
+    // Listen for custom events from components
+    window.addEventListener('viewReportDetail', (e) => showReportDetail(e.detail.date));
+    window.addEventListener('showReportsHistory', () => showReportsHistory());
 }
 
-function showReportsView() {
-    // Hide dashboard, show reports
+function showReportsHistory() {
+    // Hide dashboard and detail view, show history view
     const dashboard = document.getElementById('dashboard-view');
-    const reports = document.getElementById('reports-view');
+    const reportsView = document.getElementById('reports-view');
     const library = document.getElementById('library-view');
+    const historyContainer = document.getElementById('reports-history-root');
+    const detailContainer = document.getElementById('daily-report-root');
 
     if (dashboard) dashboard.style.display = 'none';
-    if (reports) reports.style.display = 'block';
+    if (reportsView) reportsView.style.display = 'block';
     if (library) library.style.display = 'none';
+    if (historyContainer) historyContainer.style.display = 'block';
+    if (detailContainer) detailContainer.style.display = 'none';
 
     // Update nav active state
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
     document.getElementById('dailyReportsBtn')?.classList.add('active');
 
-    // Initialize component if first time
-    if (!dailyReportComponent) {
-        if (document.getElementById('daily-report-root')) {
-            console.log('Initializing DailyReportComponent...');
-            dailyReportComponent = new DailyReportComponent('daily-report-root');
-        } else {
-            console.error('Daily Report Root container not found!');
+    // Initialize history component if first time
+    if (!reportsHistoryComponent && historyContainer) {
+        console.log('Initializing ReportsHistoryComponent...');
+        reportsHistoryComponent = new ReportsHistoryComponent('reports-history-root');
+    } else if (reportsHistoryComponent) {
+        // Refresh history when returning
+        reportsHistoryComponent.loadHistory();
+    }
+}
+
+function showReportDetail(date) {
+    // Show detail view, hide history
+    const historyContainer = document.getElementById('reports-history-root');
+    const detailContainer = document.getElementById('daily-report-root');
+
+    if (historyContainer) historyContainer.style.display = 'none';
+    if (detailContainer) detailContainer.style.display = 'block';
+
+    // Store date for detail view to pick up
+    if (date) {
+        sessionStorage.setItem('selectedReportDate', date);
+    }
+
+    // Initialize or reinit component
+    if (!dailyReportComponent && detailContainer) {
+        console.log('Initializing DailyReportComponent...');
+        dailyReportComponent = new DailyReportComponent('daily-report-root');
+    } else if (dailyReportComponent) {
+        // Load the specific date
+        const targetDate = sessionStorage.getItem('selectedReportDate') || date;
+        if (targetDate) {
+            sessionStorage.removeItem('selectedReportDate');
+            dailyReportComponent.loadReport(targetDate);
         }
     }
+}
+
+// Legacy function for backward compatibility
+function showReportsView() {
+    showReportsHistory();
 }
 
 function showDashboardView() {

@@ -674,6 +674,29 @@ module.exports = {
     },
 
     /**
+     * Get report history (all past reports)
+     * @param {number} limit - Max number of reports to fetch
+     * @returns {Array} List of reports sorted by date (newest first)
+     */
+    getReportHistory: async (limit = 30) => {
+        console.log('📋 Fetching report history...');
+
+        const { data, error } = await supabase
+            .from('daily_reports')
+            .select('id, report_date, total_posts_analyzed, total_comments_analyzed, total_sources, overall_positive, overall_negative, overall_neutral, generated_at')
+            .order('report_date', { ascending: false })
+            .limit(limit);
+
+        if (error) {
+            console.error('getReportHistory error:', error.message);
+            return [];
+        }
+
+        console.log(`✅ Found ${(data || []).length} historical reports`);
+        return data || [];
+    },
+
+    /**
      * Get sentiment trends over time
      */
     getSentimentTrends: async (days = 7) => {
