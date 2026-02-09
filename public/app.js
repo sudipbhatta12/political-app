@@ -2922,11 +2922,15 @@ async function handleAISubmit(e) {
         formData.append('news_media_id', newsId);
         formData.append('source_type', 'news_media');
 
-        // Add related party if selected
+        // Related party is now REQUIRED for news media
         const relatedPartyId = elements.aiNewsPartySelect.value;
-        if (relatedPartyId) {
-            formData.append('related_party_id', relatedPartyId);
+        if (!relatedPartyId) {
+            showToast('Please select which political party this article discusses', 'error');
+            elements.aiLoading.style.display = 'none';
+            elements.aiSubmitBtn.disabled = false;
+            return;
         }
+        formData.append('related_party_id', relatedPartyId);
     } else if (sourceType === 'party') {
         const partyId = elements.aiPartySelect.value;
         if (!partyId) { showToast('Please select a political party', 'error'); elements.aiLoading.style.display = 'none'; elements.aiSubmitBtn.disabled = false; return; }

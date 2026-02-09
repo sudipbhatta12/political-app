@@ -447,9 +447,26 @@ class DailyReportComponent {
         document.getElementById('negative-pct').textContent = `${(report.overall_negative || 0).toFixed(1)}%`;
         document.getElementById('neutral-pct').textContent = `${(report.overall_neutral || 0).toFixed(1)}%`;
 
-        // Summary
+        // Summary - Add statistical highlights + AI qualitative summary
         const summaryEl = document.getElementById('ai-summary');
-        summaryEl.innerHTML = this.formatSummary(report.summary_text || 'No summary available.');
+
+        // Generate statistical summary
+        const topParty = (report.source_summaries || []).sort((a, b) => b.post_count - a.post_count)[0];
+        const mostPositiveParty = (report.source_summaries || []).sort((a, b) => b.avg_positive - a.avg_positive)[0];
+        const mostNegativeParty = (report.source_summaries || []).sort((a, b) => b.avg_negative - a.avg_negative)[0];
+
+        const statsHighlights = `
+            <div style="background: rgba(59, 130, 246, 0.1); border-left: 4px solid #3B82F6; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+                <h4 style="margin: 0 0 12px 0; color: #60A5FA; font-size: 0.95rem;">📊 Key Statistics</h4>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                    ${topParty ? `<div style="font-size: 0.85rem;"><strong style="color: #10B981;">Most Discussed:</strong> ${topParty.source_name} (${topParty.post_count || topParty.total_posts} posts)</div>` : ''}
+                    ${mostPositiveParty ? `<div style="font-size: 0.85rem;"><strong style="color: #10B981;">Highest Positive:</strong> ${mostPositiveParty.source_name} (${mostPositiveParty.avg_positive.toFixed(1)}%)</div>` : ''}
+                    ${mostNegativeParty ? `<div style="font-size: 0.85rem;"><strong style="color: #EF4444;">Highest Negative:</strong> ${mostNegativeParty.source_name} (${mostNegativeParty.avg_negative.toFixed(1)}%)</div>` : ''}
+                </div>
+            </div>
+        `;
+
+        summaryEl.innerHTML = statsHighlights + this.formatSummary(report.summary_text || 'No qualitative summary available.');
 
         // Show summary source badge
         const badge = document.getElementById('summary-source-badge');

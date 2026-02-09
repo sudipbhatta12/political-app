@@ -267,15 +267,8 @@ async function generateSourceSummaries(mediaPosts, candidatePosts) {
                 };
             }
         } else {
-            // No party association - skip or group as unassigned
-            partyKey = 'unassigned';
-            if (!partyAggregates[partyKey]) {
-                partyAggregates[partyKey] = {
-                    party_id: null,
-                    party_name: 'Unassigned',
-                    posts: []
-                };
-            }
+            // No party association - skip this post (don't show in party breakdown)
+            continue;
         }
 
         partyAggregates[partyKey].posts.push(post);
