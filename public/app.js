@@ -2408,18 +2408,21 @@ function handleAnalysisTypeChange(type) {
         candidateSec.style.display = 'block';
         if (elements.aiProvince) elements.aiProvince.setAttribute('required', '');
         if (elements.aiNewsSelect) elements.aiNewsSelect.removeAttribute('required');
+        if (elements.aiNewsPartySelect) elements.aiNewsPartySelect.removeAttribute('required');
         if (elements.aiPartySelect) elements.aiPartySelect.removeAttribute('required');
     } else if (type === 'news') {
         newsSec.style.display = 'block';
         populateNewsSelectorInAI();
         if (elements.aiProvince) elements.aiProvince.removeAttribute('required');
         if (elements.aiNewsSelect) elements.aiNewsSelect.setAttribute('required', '');
+        if (elements.aiNewsPartySelect) elements.aiNewsPartySelect.setAttribute('required', '');
         if (elements.aiPartySelect) elements.aiPartySelect.removeAttribute('required');
     } else if (type === 'party') {
         partySec.style.display = 'block';
         populatePartySelectorInAI();
         if (elements.aiProvince) elements.aiProvince.removeAttribute('required');
         if (elements.aiNewsSelect) elements.aiNewsSelect.removeAttribute('required');
+        if (elements.aiNewsPartySelect) elements.aiNewsPartySelect.removeAttribute('required');
         if (elements.aiPartySelect) elements.aiPartySelect.setAttribute('required', '');
     }
 }
